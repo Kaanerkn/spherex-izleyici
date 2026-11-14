@@ -1,0 +1,63 @@
+# SPHEREx data releases.
+# Adding a new release (e.g. DR2, QR4) = add a [[release]] block here; no code change needed.
+# status: active | staged | superseded | retired
+#   active     -> used for searches and comparisons
+#   staged     -> known (e.g. files on S3) but not public yet; ignored by searches
+#   superseded -> cached results stay readable; never used for new searches
+#   retired    -> not available upstream any more
+# announced = false shows a "official announcement pending" note in the UI; set it to true (one line)
+#   once IRSA announces the release.
+# calib_family groups releases whose calibrations can be compared directly (R6 = QR2, R7 = QR3/DR1).
+# Every active release is searched; default_release is the one shown first (must be active).
+
+default_release = "dr1"
+
+[[release]]
+id = "dr1"
+label = "DR1"
+status = "active"
+# Released 12 November 2026 (SPHEREx announcement; IRSA's overview_dr1.html only says "November 2026",
+# checked 2026-11-14). Live 2026-11-14 (TAP obscore):
+#   945 725 images, 2025-04-24 18:01 -> 2026-05-14 11:47 UTC; QR3 continues from 2026-05-14 12:08.
+announced = true
+calib_family = "R7"
+sia_collections = ["spherex_dr1"]
+deep_collections = ["spherex_dr1_deep"]   # SIA2 verified 2026-11-14 (north ecliptic pole)
+ibe_prefix = "https://irsa.ipac.caltech.edu/ibe/data/spherex/dr1/"
+s3_prefix = "dr1/"
+doi = "10.26131/IRSA678"      # DR1 Spectral Images; Spectral All-Sky Cube = 10.26131/IRSA679
+flags_header_style = "auto"   # R7 uses MSKNnnnn/MSKMnnnn
+supersedes = { release = "qr2", start = "2025-05-01", end = "2026-05-15" }
+notes = "Data Release 1: Year-1 (surveys 1-2) reprocessed with pipeline R7 (VERSION 7.0.5)."
+
+[[release]]
+id = "qr3"
+label = "QR3"
+status = "active"
+announced = true
+calib_family = "R7"
+sia_collections = ["spherex_qr3"]
+deep_collections = ["spherex_qr3_deep"]
+ibe_prefix = "https://irsa.ipac.caltech.edu/ibe/data/spherex/qr3/"
+s3_prefix = "qr3/"
+doi = "10.26131/IRSA662"
+flags_header_style = "auto"
+cross_family_correction = "l3_flux_corrections"   # multiplicative factor for pre-QR3 (R6) data
+# Per-detector correction map (2040x2040, dimensionless). {det} = 1..6. Multiply pre-QR3 (R6) pixels by it.
+flux_corrections_url = "https://irsa.ipac.caltech.edu/ibe/data/spherex/qr3/l3_flux_corrections/cal-flxc-v1-2026-191/{det}/l3_flux_corrections_D{det}_spx_cal-flxc-v1-2026-191.fits"
+show_with_warning = false     # same calibration family as DR1
+notes = "Quick Release 3 (pipeline R7). Surveys 3-4."
+
+[[release]]
+id = "qr2"
+label = "QR2"
+status = "superseded"         # 2026-11-12: removed from IRSA TAP/SIA2, replaced by DR1; files still on IBE
+announced = true
+calib_family = "R6"
+sia_collections = ["spherex_qr2"]
+deep_collections = ["spherex_qr2_deep"]
+ibe_prefix = "https://irsa.ipac.caltech.edu/ibe/data/spherex/qr2/"
+s3_prefix = "qr2/"
+doi = "10.26131/IRSA652"
+flags_header_style = "auto"   # QR2 uses MP_<NAME>
+notes = "Quick Release 2 (pipeline 6.4-6.5.x). Superseded by DR1."

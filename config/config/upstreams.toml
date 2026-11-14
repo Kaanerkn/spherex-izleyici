@@ -1,0 +1,46 @@
+# Outbound allowlist (SSRF protection). The server never connects to any other host,
+# and redirects are checked against this list too.
+# Timeouts in seconds; concurrency = max parallel requests per upstream group.
+
+[groups.irsa]
+# SPHEREx SIA/TAP/cutouts, MOST, and the catalogue layer (AllWISE allwise_p3as_psd, 2MASS fp_psc via /SCS
+# and /TAP on irsa.ipac.caltech.edu)
+hosts = ["irsa.ipac.caltech.edu", "nasa-irsa-spherex.s3.amazonaws.com", "nasa-irsa-spherex.s3.us-east-1.amazonaws.com"]
+timeout = 60
+concurrency = 4
+
+[groups.cds]
+# Sesame, SIMBAD TAP (names, proper motions, and named objects of the catalogue layer)
+hosts = ["cds.unistra.fr", "vizier.idia.ac.za", "simbad.cds.unistra.fr", "simbad.cfa.harvard.edu", "simbad.harvard.edu"]
+timeout = 15
+concurrency = 4
+# Tried in order; Strasbourg SIMBAD was down on 2026-11-12 while the CfA mirror worked.
+simbad_tap_mirrors = ["https://simbad.cds.unistra.fr/simbad/sim-tap", "https://simbad.cfa.harvard.edu/simbad/sim-tap"]
+sesame_url = "https://cds.unistra.fr/cgi-bin/nph-sesame/-oxp/SNV"
+
+[groups.jpl]
+hosts = ["ssd-api.jpl.nasa.gov", "ssd.jpl.nasa.gov"]
+timeout = 20
+concurrency = 4
+
+[groups.esa]
+# Gaia DR3 via the ESA Gaia archive TAP (pyvo; the host is checked against this list before each query)
+hosts = ["gea.esac.esa.int"]
+timeout = 30
+concurrency = 2
+
+[groups.cadc]
+# Canadian Astronomy Data Centre: SSOIS (and NEOSSat, if its endpoint is verified)
+hosts = ["www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca", "ws.cadc-ccda.hia-iha.nrc-cnrc.gc.ca"]
+timeout = 60
+concurrency = 2
+
+[groups.wikimedia]
+hosts = ["www.wikidata.org", "tr.wikipedia.org", "en.wikipedia.org"]
+timeout = 10
+concurrency = 4
+
+[groups.email]
+hosts = ["api.emailjs.com"]
+timeout = 15
+concurrency = 1
