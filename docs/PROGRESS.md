@@ -1,0 +1,251 @@
+# İlerleme durumu
+
+> **Son güncelleme:** 2026-11-14 ~15:30 TSİ. Aşama 4 (Gaia, SSOIS, NEOSSat) ve yarışma hedefleri denetimi bitti (`8555d70` … `2e202b1`, her biri ayrı push + prewarm + health). Testler: arka uç 180, ön uç 45, tsc/ruff temiz, ESLint 0 hata (3 uyarı). **Sıradaki iş:** kullanıcı onayı bekleniyor. Donma 21:00. **Kural (kullanıcı, 2026-11-14): her push'tan sonra `tools/prewarm.py` cisim cisim çalıştırılır ve `/api/v1/health` denetlenir.**
+>
+> **Bu oturumda bitenler (sırayla):** karşılama ekranı · Excel · DR1 duyurusu · Samanyolu yakınlaştırma · yarı saydam paneller · asistan (hazır sorular, canlı güncellik, cisme göre cevap) · Hubble↔Webb iptali · veri durum çubuğu · spektrum · gözlem filtreleri + veri kalitesi · canlı konum · hareket izi · NEW_DATA.md · "Görüntü bilgisi bulunamadı" düzeltmesi · kalıcı arşiv güncelliği · dış bağlantılar paneli. **Yarım kalan:** yok. · Teslim: **15 Kasım 2026, 16:00** · Canlı: https://spherex-izleyici.onrender.com
+> Kararlar ve talimatlar: [`DECISIONS.md`](DECISIONS.md) (**geçerli plan §4e**) · Mimari: [`ARCHITECTURE.md`](ARCHITECTURE.md) · Veri kaynakları: [`DATA_SOURCES.md`](DATA_SOURCES.md) · Kaynaklar/atıflar: [`SOURCES.md`](SOURCES.md) · Yayın: [`DEPLOY.md`](DEPLOY.md)
+
+## Geçerli plan (DECISIONS.md §4e) — durum
+
+| Madde | Durum | Not |
+|---|---|---|
+| **1a** Kaynaklar sayfası + `SOURCES.md` | ✅ | 13 kaynak (`config/attributions.toml` tek kaynak). Teşekkür metinleri 2026-11-13'te sağlayıcı sayfalarından aynen alındı: SPHEREx, SIMBAD, MAST (HST/JWST), Gaia DR3 (+ lisans CC BY-NC 3.0 IGO), CADC (SSOIS belge sayfası), NEOSSat (CADC). Sitede `/#kaynaklar`, alt bilgiden bağlantı; eski atıf iletişim kutusu kaldırıldı. `SOURCES.md`, `tools/gen_sources_md.py` çıktısıdır; `tests/test_sources.py` eşitliği ve zorunlu metinleri denetler. **Bulunamayanlar:** JPL Horizons'ın resmî teşekkür kalıbı (bizim açıklamamız, "alıntı değildir" notuyla); OGL–Canada sayfası otomatik erişimi reddetti (ad talimattan). Gelecekte kullanılacak kaynaklar "Planlandı" olarak işaretli. |
+| **1b** NEOSSat notları (`DATA_SOURCES.md`) | ✅ | §12: ürün sırası (CORD → COR → RAW uyarılı, CLEAN yok), 2,997″/px ve 0,86° (CSA-NEOSSAT-MAN-0002 v4.00'dan doğrulandı), CTYPE1/CRTYPE1 + CD matrisi, süzgeç anahtarları, FILTER=CLEAR → parlaklık karşılaştırması yok. "WCS = uydu yönelim tahmini" ifadesi kılavuzda bulunamadı, not düşüldü. CADC TAP henüz denenmedi (madde p). Ayrıca §4.8'e 2026-11-13 MOST doğrulaması eklendi. |
+| **1c** 3I/ATLAS oynatıcı + "Koleksiyon" kartı | ✅ | Oynatıcı `239827d` (canlıda doğrulandı). Ana sayfada "Koleksiyon" kartı: "Kare kare izle" aramayı arama kutusu üzerinden başlatır (`?q=` paylaşım bağlantısı güncellenir); IRSA'nın 3I/ATLAS SPHEREx sayfasına bağlantı (200 doğrulandı). Test: `Hero.test.tsx` (+ tr/en anahtar eşitliği testi). |
+| **1d-1** Geri bildirim butonu | ✅ | Üst çubukta (her sayfada). Kategori (Hata/Öneri/Veri sorunu/Diğer), mesaj (5–2000), isteğe bağlı e-posta ("yalnızca yanıt için"), sayfa + seçili cisim otomatik eklenir. `POST /api/v1/feedback` → `feedback` tablosu (Alembic `0003`, `alembic check` temiz), denetim karakterleri temizlenir, bağlam düz değerlerle sınırlı, gizli tuzak alanı (bot → kayıt yok), oturum başına ~6/saat. Testler: `test_feedback.py` (4), `FeedbackButton.test.tsx` (2). **Admin listesi Aşama 2 f'de** (admin girişi gerektiriyor). |
+| **1d-2** Arama kutusunda otomatik öneri | ✅ | `GET /api/v1/suggest?q=` (+ `&local=1` anında yanıt). Kaynaklar: yerel Türkçe liste `config/names_tr.json` (49 cisim; her `query` 2026-11-13'te `/resolve` ile canlı doğrulandı, Halley/Encke için `1P`/`2P`), Sesame (yalnızca SIMBAD, tam ad), JPL SBDB, SIMBAD kimlik öneki. Her uzak kaynak 4 sn sınırlı ve paralel; düşen kaynak `unavailable` içinde bildirilir, yerel liste her zaman yanıt verir. Türkçe normalleştirme (ı/İ, ş, ğ, ü, ö, ç). "barnard" → **Barnard Yıldızı** ilk sırada. Koordinat girilince "Bu koordinatta ara". `/resolve` da tam Türkçe adı tanır ("Kutup Yıldızı" → Polaris). Ön uç: ARIA combobox/listbox, 2 karakter, 250 ms, en fazla 8, ↑/↓/Enter/Esc/Tab, eski yanıtlar atılır. **Düzeltilen hata:** `adql_str` `%`'yi sildiği için SIMBAD `LIKE` sorguları tam eşleşmeye dönüşüyordu (eski "Bunu mu demek istediniz?" önerileri de etkileniyordu). Testler: `test_suggest.py` (25), `SearchBox.test.tsx` (4). **2026-11-13 düzeltme:** tam eşleşmeler her zaman en üstte ("m3" → M 3, sonra M 31/M 33); tam eşleşme = Sesame/SBDB'nin doğrudan çözdüğü ad, yerel listede birebir ad/takma ad ya da SIMBAD kimliğinin yazılanla aynı olması (+3 test, canlıda doğrulandı). |
+| **2g-1** WebSocket: yavaş sorgu ilerlemesi | ✅ | Gözlem/kesit/karşılaştırma/MOST zaten iş + WS ile çalışıyordu. Eklenenler: her ilerleme mesajında `elapsed_s`; `/objects/info` ve `/objects/similar` önbellekteyse hemen, değilse `job_id` + adımlar (`info_query`, `info_fallback` (Sesame yedeği), `similar_query`); istemcide `runMaybeJob` ve ortak `ProgressLine` (adım + saniye sayacı, 20 sn sonra "arşiv yavaş, işlem sürüyor" notu). Yeniden bağlanınca abonelikler geri yükleniyor, HTTP yoklaması her zaman yedek. Testler: `test_progress.py` (4, WS üzerinden `job_done` dahil), `ProgressLine.test.tsx` (3). Kalan WS işleri: admin canlı akışı (f) ve asistan akışı (i). |
+| **2-prewarm** `tools/prewarm.py` | ✅ | 3I/ATLAS, Barnard, WISE 0855, Luhman 16. Arayüzün yaptığı istekleri sırayla yapar: ad çözümleme, bilgi paneli, aynı tür önerileri, gözlemler (Barnard D5, WISE 0855/Luhman 16 D6), varsayılan zaman karşılaştırması (ilk ve son dönem, en küçük Δλ/bant); 3I/ATLAS için MOST kareleri ve en parlak dönemin D5 kesitleri (3 paralel, en fazla 40). Yalnızca standart kütüphane, 429'da bekleyip yeniden dener. Yerelde canlı veriyle çalıştı (43 sn, 0 hata): Barnard 12,50″, WISE 0855 8,52″, Luhman 16 2,90″ ölçülen kayma; 3I/ATLAS 17/17 kesit. Test: `test_prewarm.py` (seçim mantığı arayüzle aynı). Kullanım `DEPLOY.md`'de. |
+| **2e** Hesaplar (EmailJS) | ✅ canlıda doğrulandı (kullanıcı kodla giriş yaptı, 2026-11-14) | Tablolar `user_account`, `login_code`, `auth_session`, `saved_item` (Alembic `0004`, `alembic check` temiz). Kod: `secrets` ile 6 hane, yalnızca HMAC-SHA256(SECRET_KEY) saklanır, 10 dk, kod başına 5 deneme (sonra kilit), e-posta başına saatte ≤3 gönderim (+ oturum başına sınır), yalnızca en yeni kod geçerli, başarısız gönderim hakkı yemez. EmailJS REST sunucudan, `accessToken` ile; şablon değişkenleri `to_email`, `code`, `valid_minutes`, `site_url` (DECISIONS §4f). EmailJS boşsa geliştirmede kod yalnızca sunucu günlüğüne (maskeli e-postayla), üretimde 503 `EMAIL_NOT_CONFIGURED`; kod hiçbir yanıtta yok. Oturum: rastgele belirteç, httpOnly/SameSite=Lax (üretimde Secure) çerez, yalnızca SHA-256 saklanır, 30 gün. Çerezli POST'larda Origin denetimi. Admin rolü `ADMIN_EMAIL` ile (saklanmaz). Kayıtlılar: cisim listesi + çalışmalar (karşılaştırma kimliğiyle; yalnızca hesaplayan tarayıcı ya da sahibi kaydedebilir), en fazla 200. Ön uç: üst çubukta Giriş/Hesabım, iki adımlı giriş (tek kullanımlık kod alanı), cisim başlığında "Listeme ekle", karşılaştırma sonuçlarında "Çalışmayı kaydet". Testler: `test_accounts.py` (11), `Account.test.tsx` (2). Yerelde uçtan uca curl ile doğrulandı. |
+| **2e-fix** Kod isteme sınırı | ✅ `1e44269` | Gönderilmeyen kod (EmailJS hatası, adres sınırı, geçersiz adres) tarayıcı hakkını yemez; 429'da `retry_after_s` + "yaklaşık N dakika". Sınırlar: tarayıcı başına art arda 5 istek, sonra 12 dk'da 1 (bellekte, yayında sıfırlanır); e-posta başına saatte 3 (veritabanında). |
+| **2f** Admin paneli | 🟡 kod bitti, canlıda yönetici girişiyle **denenmedi** — aşağıdaki "Admin paneli: nerede kaldık" | `32a2723` |
+| **Karşılama ekranı** (kullanıcı talimatı, 2026-11-14 sabah, Excel'den önce) | ✅ `eb6bdb3`, canlıda doğrulandı (yeni paket yayında, `/api/v1/health` 200 `db: ok`) | `components/Welcome.tsx` (`EntryGate`), `lib/entry.ts`. Mevcut arayüzün önüne konan kapı: Samanyolu arka planı üzerinde başlık, tek cümle, "Giriş yap" (mevcut e-posta + 6 haneli kod akışı ve Türkçe sınır mesajları) ve "Misafir olarak devam et"; gizlilik notu ("Giriş yaparsan arama ve liste etkinliğin site yöneticisi tarafından görülebilir." + misafir etkinliği kişisel veriyle eşleşmez). Seçim `sessionStorage`'da (yalnızca bu sekme oturumu); giriş yapmış kullanıcı görmez; çıkışta ekrana dönülür. `?q=` (cisim ve paylaşılan karşılaştırma bağlantıları), `#admin`, `#kaynaklar` ekranı atlar; `#admin` girişsizse kendi "Giriş yap" düğmesini gösterir. Telefon genişliğinde düğmeler alt alta, tam genişlik. Testler: `Welcome.test.tsx` (3: misafir + oturumda hatırlama, giriş sonrası geçiş + çıkışta dönüş, doğrudan bağlantı atlama). **Tarayıcıda elle bakılmadı** (kullanıcı kontrol edecek). |
+| **2h** Excel olarak indir | ✅ `09fdb06`, canlıda doğrulandı (curl: M 31 → `m-31_2026-11-14.xlsx`, 362 gözlem satırı, indirme 200 + doğru MIME, 37 KB; `/api/v1/health` 200 `db: ok`). Tarayıcıda düğmeyle **denenmedi** | `services/export_xlsx.py` (openpyxl, saf biçimleme) + `api/v1/export.py`. `POST /export/xlsx {items:[{q,d}], filters}` iş olarak çalışır (adımlar `export_object`, `export_build` + mevcut SIA2/dalga boyu adımları, WS); `GET /export/<id>` dosyayı yalnızca isteyen tarayıcıya verir (15 dk bellekte, en fazla 30 dosya; yayında sıfırlanır). Sorgu sunucuda yeniden çözümlenir (`resolve_target`, tarayıcının koordinatına güvenilmez). Sayfalar: **Özet** (ad, SIMBAD kimliği, tür, tayf, RA/Dec derece + sa/°, uzaklık 1/paralaks, Vikipedi özeti ve bağlantısı, sayılar, notlar, kullanılan kaynakların teşekkür metinleri `attributions.toml`'dan aynen + SPHEREx atıfları), **Gözlemler** (tarih, MJD, ziyaret, sürüm, dedektör, hedefte λ, bant genişliği, yaklaşık kanal, dedektör aralığı, gözlem kimliği, boru hattı, FITS bağlantısı), **Zaman karşılaştırması** / **Cisim karşılaştırması** (yalnızca yapıldıysa; bu tarayıcının ya da kullanıcının `comparison` kayıtları, cisim başına en yeni 25; uyarılar sitedeki Türkçe metinlerle), **Hareket** (MOST: tarih, RA/Dec, r, Δ, faz, V, kare merkezine uzaklık; "öngörülen konum, ölçüm değil" notu). Formül enjeksiyonu: `= + - @` (ve sekme/CR) ile başlayan metne `'`; hiçbir hücre formül değil (testli). Sayfa başına 5.000 satır, kesilen satır sayısı Özet'te. Ham piksel yok. Dosya adı `cisimadi_YYYY-MM-DD.xlsx` (Türkçe harfler sadeleşir; çoklu: `cisim-listesi_…`). Misafir 1 cisim (fazlası 401 `LOGIN_REQUIRED_MULTI`), giriş yapan en fazla 20 (Hesabım → "Excel'e aktar", onay kutularıyla). İndirme her zaman `download` olayı olarak kaydedilir (izin yoksa IP/UA'sız) → admin "İndirme" grubu. **λ notu:** hedefteki λ sitede seçili dedektör için hesaplanır; diğer dedektörlerde yalnızca önbellekte varsa dolu (IRSA'ya yüzlerce ek istek atmamak için), Özet'te açıklandı. Filtreler (tarih, sürüm, λ) API'de hazır ve testli; arayüzdeki filtre denetimleri Aşama 3 j ile gelecek. Excel yalnızca Türkçe. Ön uç: cisim başlığında ve hareketli cisim görünümünde "Excel olarak indir". Testler: `test_export.py` (7), `ExcelButton.test.tsx` (2). Yerelde gerçek veriyle: Barnard D5 → 358 gözlem satırı; 3I/ATLAS → 364 kare + Hareket sayfası (11 sn). |
+| **DR1 duyurusu** (kullanıcı talimatı, 2026-11-14) | ✅ `ae692f9` | Canlı TAP: `spherex_dr1` 945 725 görüntü (2025-04-24 → **2026-05-14 11:47 UTC**), `spherex_qr3` 362 124 (→ **2026-10-05 00:01 UTC**), QR2 TAP'ta yok. SIA2 (Barnard): DR1 240, QR3 123, QR2 0; derin alan `spherex_dr1_deep` çalışıyor. MOST DR1 döndürüyor (3I/ATLAS 364 DR1; Eros 916 DR1 + 38 QR3) → not gerekmedi. `releases.toml`: `announced = true`, DOI 10.26131/IRSA678 (+ IRSA679 All-Sky Cube), varsayılan DR1, QR2 `superseded`. IRSA teşekkür metni ack.html ile birebir (İngilizce orijinal, `lang="en"`). Ayrıntı `DATA_SOURCES.md` §4.9. |
+| **Samanyolu yakınlaştırma** | ✅ `af8e76d` | `GALAXY_ZOOM = 1.4` (`galaxy/GalaxyBackground.tsx` başı; 1 = eski çerçeve). Kamera zoom'u + nokta boyutu aynı katsayıyla; okunabilirlik örtüsü 0/0,35/0,8 → 0,12/0,45/0,85. Karşılama ve ana arayüz aynı bileşen. Tarayıcıda bakılmadı. |
+| **Yarı saydam paneller** | ✅ `958e9ac`, canlıda | Samanyolu'nu engelleyenler: `.glass` %78 opak + blur 14px; arka plan örtüsü (kenarlarda %85); iç kartlar `bg-space-950/50`. Şimdi `.glass` %58 + blur 8px + kenarlık %16 + ince metin gölgesi; diyalog/açılır liste/asistan/gizlilik için `.glass-strong` (%88); örtü 0,18/0,18/0,5; iç kartlar /35; görüntüleyici çerçeveleri opak; `GALAXY_ZOOM = 1.4` aynı. Kontrast hesabı (en kötü durum: panelin arkasında beyaz çekirdek): ink-100 ≥ 4,9:1; galaksi kollarında ink-100/300/400 ≥ 4,5:1. Ekran görüntüsü alınmadı (DECISIONS §4e); masaüstü/telefon görünümünü kullanıcı kontrol edecek. Yerleşim değişmedi. |
+| **2g-2 + i** Kural tabanlı asistan + WS akışı | ✅ `e8bb34a` + `cf74f7b` (kullanıcı talimatı 2026-11-14) | `config/assistant_faq.json` (kodsuz düzenlenir). **Hazır düğmeler:** SPHEREx nedir?, Bu görüntüdeki renkler ne anlama geliyor?, Zaman karşılaştırmasını nasıl kullanırım?, Hareketli cisim nedir, 3I/ATLAS neden özel?, Veri nereden geliyor, ne kadar güncel?, Hubble ve Webb karşılaştırması nedir? (özelliğin henüz olmadığı açıkça yazılır), Karşılaştırmayı yorumla, Seçili cisim. Eşleşme yoksa "Bunu bilmiyorum. Şu sorulardan birini dene:" + 6 hazır soru. **Veri güncelliği:** `services/freshness.py` arşivdeki en yeni gözlemi IRSA TAP'tan arka planda okur (açılışta ve 12 saatte bir; sorgu ~2 dk sürdüğü için sohbette beklenmez); sabit tarih yok, okunmadıysa "okunuyor" denir; testte `ARCHIVE_FRESHNESS_CHECK=false`. **Cisme göre:** "renkler" ve "zaman karşılaştırması" cevaplarına açık cismin adı, türü ve SPHEREx görüntü sayısı eklenir (sayı yalnızca önbellekten: kapsam / MOST; yoksa "henüz hesaplanmadı"). **Admin günlüğü:** yalnızca `assistant_question` (soru metni, cisim, cevap türü yok; izin çerezi kuralı geçerli), admin'de "Asistan" grubu ve "Asistan sorusu" etiketi. E7 "Görüntü neden pikselli?" dahil. `services/assistant.py`: `AssistantEngine` protokolü (`reply()` metin parçaları + son `Answer`) → `RuleBasedAssistant` (ileride dil modeli aynı arayüze takılabilir). Türkçe normalleştirme + anahtar kelime ağırlıkları (4+ harf ek alır: "piksel" ~ "pikselli"); eşik altı → öneriler; mesajda yerel listeden cisim adı geçerse ya da kısa mesaj çözümlenirse cisim açılır (`open_object`). "Karşılaştırmayı yorumla" yalnızca sunucudaki `comparison` kaydından (bu tarayıcının ya da kullanıcının; başka tarayıcının kimliği okunamaz): kayma px/″ ve yön, beklenenle fark (≤ 0,5 px → "uyumlu ✓"), parlaklık farkı ± hata ve σ (≥ 3σ anlamlı), kanal, uyarılar (Excel ile aynı Türkçe metinler); değer yoksa "ölçülemedi"/"önce bir karşılaştırma yap". `POST /assistant/message` iş olarak çalışır, cevap `assistant_chunk` adımlarıyla WS'den akar (abone olmak için ≤ 1 sn beklenir), sonuç tam metni taşır (HTTP yedeği). Ön uç `features/AssistantPanel.tsx`: sağ alt "Asistan" düğmesi, sağdan çekmece (telefonda tam genişlik), panel notu, "Yazıyor…", öneri çipleri, Esc ile kapanır; yalnızca karşılaştırma kimliği gönderilir (`lib/lastComparison.ts`, cisim değişince sıfırlanır). Cevaplar yalnızca Türkçe. Testler: `test_assistant.py` (23: hazır düğmeler + sabit tarih/yüzde yok, serbest metin eşleşmesi, "Bunu bilmiyorum" + öneriler, canlı güncellik / "okunuyor", cisme göre cevap, admin'e yalnız `assistant_question`, TAP okuması, yorumlama, sahiplik, WS akışı), `AssistantPanel.test.tsx` (2). Yerel WS denemesi: ilk parça 0,06 sn, parçalar = tam metin; gerçek Luhman 16 ve WISE 0855/Luhman 16 kayıtları doğru yorumlandı. **Canlıda doğrulandı (`cf74f7b`, 2026-11-14 06:52 UTC):** güncellik IRSA'dan arka planda okundu → "en yeni SPHEREx gözlemi: 2026-10-05 (QR3) … DR1: 2026-05-14"; Barnard açıkken "358 görüntü"; eşleşmeyen soru → "Bunu bilmiyorum…" + hazır sorular; cevap parça parça. **Tarayıcıda bakılmadı.** |
+| ~~Hubble ↔ Webb~~ | **iptal edildi (kapsam dışı)**, 2026-11-14 | DECISIONS §4g. Asistan sorusu kaldırıldı ("Bunu bilmiyorum"a düşer), Kaynaklar'dan HST/JWST (MAST hiç kullanılmadı) ve `upstreams.toml`'dan `mast.stsci.edu` çıkarıldı; testler bunların geri gelmesini engeller. |
+| **k-1** Veri durum çubuğu | ✅ `81e7e46`, canlıda | `GET /meta/status` + `components/StatusBar.tsx` (üst çubuğun altında, her genişlikte). Gösterilenler: etkin sürümler (DR1 varsayılan + QR3); arşivdeki en yeni gözlem ve son kontrol zamanı (`services/freshness.py`, arka planda IRSA TAP); IRSA / SIMBAD / JPL durumu (`http.py`'de sunucunun kendi son isteğinin sonucu; ping yok, istek yoksa "henüz denenmedi"). Üst çubuktaki "henüz taranmadı" rozeti kaldırıldı. |
+| **k-2** Spektrum grafiği | ✅ `81e7e46`, canlıda (Luhman 16, 2025-05 ziyareti: 132 pozlama → 121 nokta, 116 sn, 0 hata) | `services/spectrum.py`, `POST /sky/spectrum` (iş + WS), `features/SpectrumPanel.tsx`. Bir ziyaretin 6 bandındaki tüm pozlamalarda hedefin ±8 satırı HTTP Range ile okunur. R7'de FLAGS RICE_1 ile sıkıştırılmış; tanımlayıcı + yığın okunup astropy `Rice1` ile açılır. Kesit fotometrisiyle aynı sonuç (oran 1,0000). Pozlama başına önbellek. Grafik: tek seri, dedektörler x ekseninde bant; hata çubukları, log/doğrusal eksen, ipucu, tablo görünümü, sayımlar ve yöntem notu. Testler: `test_spectrum.py` (4, R7 düzenindeki sentetik dosya + Range sunan sahte sunucu), `SpectrumPanel.test.tsx` (3, durum çubuğu dahil). |
+| **j-1** Gözlem filtreleri + veri kalitesi satırı | ✅ `11b09d9`, canlıda (filtreli Excel: Barnard yalnız DR1, λ 4,0–4,5 → 24 satır, hepsi `dr1`, λ 4,010–4,407; Özet'te filtre satırı) | `lib/obsFilters.ts` (sunucu `ExportFilters` ile aynı kural), `components/ObsFilterBar.tsx`, `components/QualityLine.tsx`. Tek görüntü: maskeli piksel oranı, zodyak (model adı), boru hattı/sürüm. Karşılaştırma: A/B maskeli oranı, zodyak, yerel arka plan, normalleştirme çarpanı, QR2→QR3 akı düzeltmesi, öz hareket düzeltmesi. Test: `obsFilters.test.ts` (2). |
+| **j-2** Canlı konum + "Benim gökyüzümde" | ✅ `9c3294d`, canlıda (Barnard/Ankara: yükseklik 16°, yön 97°, 10 sn'de güncelleme; 3I/ATLAS Horizons'tan; yeni iş eskisini durdurdu) | `services/live.py`, `api/v1/live.py`, `features/LivePanel.tsx`, `config/cities_tr.json` (24 şehir, Wikidata P625 + QID; `tools/cities_from_wikidata.py`). Yıldız: J2000 + öz hareket; yükseklik/yön astropy AltAz ile (IERS indirilmez). Güneş Sistemi: JPL Horizons gözlemci efemerisi (24 sa, 10 dk adım, 30 dk önbellek), ara değer. Doğuş / en yüksek / batış (ufuk 0°, kırılma ihmal), "hep üstünde" / "hiç doğmuyor". Tarayıcı konum izni istenmez (testli). Horizons COMMAND kuralı canlı denendi (DATA_SOURCES §4.10). Testler: `test_live.py` (6), `LivePanel.test.tsx` (1). |
+| **l** Hareket izi katmanı | ✅ `86f923d`, canlıda doğrulandı (Barnard D5, DR1 → QR3, 59×59 piksellik kesit; beklenen A/B (29,1; 29,6) / (28,9; 27,8), ölçülen (29,4; 29,7) / (28,9; 27,7), fark ≤ 0,3 piksel; 2010.0 kesitin içinde y = 56,1) | `motion_track()` (time_compare): öz hareketi bilinen yıldızlarda 2010.0, 2016.0, A ve B tarihlerindeki beklenen konumlar ile ölçülen ağırlık merkezleri, A'nın ızgarasında piksel olarak. Karşılaştırma görünümlerinde kesikli çizgi + noktalar, ölçülenler ×, aç/kapa düğmesi ve "Çizgi, bilinen hareketten hesaplanan beklenen konumdur; ölçüm değildir." notu. Güneş Sistemi gök yolu açıklamasına MOST konumları ve aynı not eklendi. Testler: `test_track.py` (2), `CutoutView.test.tsx` (2). |
+| **k-3** `docs/NEW_DATA.md` | ✅ `1bb81fb` | Yeni sürüm (QR4, DR2…) için 7 adım: `check_release.py`, `releases.toml` bloğu (`staged` → `active`), yerel deneme, varsayılan/`superseded`, duyuru ve DOI, push + prewarm, beklenmedik veri. |
+| **"Görüntü bilgisi bulunamadı"** (`UNKNOWN_IMAGE`) | ✅ `1bb81fb` | **Sebep:** görüntü dizini (`_index/images`) disk önbelleğinde. Render yayını/yeniden başlaması ya da admin "Önbelleği yenile → tümü" onu siliyor; açık sayfa eski kimliklerle kesit/karşılaştırma isteyince 404. Yerelde yeniden üretildi (boş dizin → 404). DR1/QR3 karışık çiftte dizin anahtarları ayrık; sorun değil, yalnızca iki kat etkileniyor. **Düzeltme:** `S.find_image` istekteki konumda kapsamı bir kez yeniden sorgulayıp dizini tazeler (DR1 ve QR3 birlikte). Kesit, hareketli kare, zaman ve cisim karşılaştırmasında kullanılıyor; adım "Görüntü listesi yenileniyor…". İstemci yine de alırsa aramayı bir kez sessizce yeniler, seçili çifti korur ve işlemi tekrarlar. **Doğrulama:** gerçek IRSA ile, dizin silindikten sonra `dr1:2025W34_2B_0090_4:D5` (A) ve `qr3:2026W34_1A_0363_1:D5` (B) bulundu. Canlıdaki denemede uydurduğum `…0321_1:D5` kimliği gerçekte yoktu; doğru biçimde `UNKNOWN_IMAGE` aldı. Testler: `test_reindex.py` (3, DR1 A + QR3 B karışık). |
+| **Kalıcı arşiv güncelliği** | ✅ `1bb81fb`, canlıda | `app_state` tablosu (Alembic `0005`, `alembic check` temiz). En yeni gözlem veritabanına da yazılır; açılışta oradan anında yüklenir ve 12 saatten yeniyse açılışta IRSA'ya sorulmaz. İki koleksiyon paralel sorgulanır (~2 dk). İlk kez bu yayında yazıldı (2026-10-05 QR3, kontrol 10:35 UTC); sonraki yayınlarda "okunuyor" görünmeyecek. Test: `test_freshness_survives_a_deploy_via_the_database`. |
+| **Dış bağlantılar paneli** | ✅ `1bb81fb`, canlıda | `/meta/links` ← `attributions.toml` `[[link]]`. IRSA SPHEREx Veri Gezgini, IRSA SPHEREx sayfası, Açıklayıcı Ek Belge, SPHEREx Arşiv Kullanım Kılavuzu (hepsi 2026-11-14'te HTTP 200). Sağ sütunda. Her bağlantı Kaynaklar'da da anılıyor (testli). WiseView yok (URL biçimi doğrulanmadı). |
+| **Prewarm (`1bb81fb` sonrası)** | ✅ 0 hata | Barnard 12,50″, WISE 0855 8,52″, Luhman 16 2,90″, 3I/ATLAS 17/17 kesit; health 200. |
+| **n** Gaia DR3 katmanı | ✅ `5a8362d`, canlıda | ESA Gaia arşivi TAP + pyvo (astroquery kullanılmıyor), `gaiadr3.gaia_source`, J2016.0.
+**(A)** Hedefin SPHEREx tarihlerindeki beklenen konumu: öz hareket + yıllık paralaks (Yer'in barisentrik konumu astropy'den; bağımsız vektör hesabıyla < 2 mas testli).
+**(B)** Alandaki Gaia kaynakları A tarihine taşınıp "aday" halkalarıyla işaretleniyor (aç/kapa). Hedef karşılığı Gaia döneminde, 1 SPHEREx pikseli (6,15″) içinde en yakın kaynak; tesadüfi eşleşme olasılığı kesilmeyen `COUNT(*)` yoğunluğundan, hem gözlenen ayrımda hem tüm yarıçapta.
+Eksik öz hareket "veri yok" (0 yapılmaz); eşleşme yoksa "yeni keşif" denmez. Gaia düşerse karşılaştırma bozulmuyor.
+**Canlı:** Barnard'ta aday 4472832130942575872; paralaks düzeltmeli beklenen kayma 11,07″, ölçülen 12,50″, fark 0,23 piksel; tesadüfi olasılık %0,007. Luhman 16'da aday 5353626573555863424, 2 parametreli çözüm → beklenen konum "veri yok".
+Testler: `test_gaia.py` (7), `GaiaLayer.test.tsx` (4). DATA_SOURCES §10c. |
+| **o** CADC SSOIS | ✅ `ffb6c9b`, canlıda | Hareketli cisim görünümünde "Başka teleskoplar". `bynameCADC`, BÜYÜK HARF, `format=tsv`.
+Uç nokta canlıdan bulundu (`ssosclf.pl`; `ssos.pl` 404, `eunits=bary` 500). CADC adla araması yalnızca asteroitleri kapsıyor (MPCORB.DAT); kuyruklu yıldızlar (3I/ATLAS, 1P) sorgulanmıyor, "kapsam dışı" yazıyor. Horizons/MPC araması kullanılmıyor.
+Gösterilenler: özet (toplam, alet dağılımı, tarih aralığı, en yeni 50; bağlantı yalnızca https) ve "öngörülen konum alana düşüyor, görünür olduğu anlamına gelmez" notu.
+**Canlı:** Eros 7 283 kare (2002–2025); 3I/ATLAS kapsam dışı. Testler: `test_ssois.py` (3), `OtherTelescopes.test.tsx` (2). DATA_SOURCES §10d. |
+| **p** NEOSSat | ✅ `13e6bdf`, canlıda | Uç nokta CADC kayıt dosyasından (`ivo://cadc.nrc.ca/argus`) alınıp canlı doğrulandı.
+Cisim sayfasında "NEOSSat kareleri": konumu içeren "object" gözlemleri; karanlık kareler alınmıyor. Gözlem başına CORD > COR > RAW (CLEAN yok, RAW uyarılı); en yeni 10 için datalink'ten önizleme ve FITS bağlantısı, indirme yok. Filtresiz optik ve sınırlı WCS doğruluğu notu.
+**Canlı:** M31 223 gözlem, önizleme geliyor; WISE 0855 0 gözlem. Test: `test_neossat.py` (3). DATA_SOURCES §12. |
+| **r** unWISE (isteğe bağlı) | **yapılmadı** | İstenmedi, kapsam dışı bırakıldı. |
+| AllWISE alan sorgusu + dipol adayı (Aşama 4 eki) | **yapılmadı** | Bu turda istenmedi (yalnızca Gaia / SSOIS / NEOSSat). |
+| **Gaia olasılık açıklaması** | ✅ `8555d70` | Panelde tek cümle: alandaki G < 19 kaynak sayısı, alan yarıçapı (″), yoğunluk ρ (kaynak/yay dakikası²), P = 1 − exp(−π·r²·ρ), r = gözlenen ayrım (en az 0,1″) ya da 6,15″. Sayılar arka uçla aynı (Barnard: 422 kaynak, 255″, ρ ≈ 7,47 → 6,15″ için %21,8). |
+| **Yarışma hedefleri denetimi** (2026-11-14) | aşağıda | Var / kısmen / yok ve kapatılanlar: |
+| ↳ Koordinat girişi | **var** (`c9a5beb` ile genişletildi) | Önceden olanlar: ondalık, virgüllü, Türkçe virgül, sa-dk-sn (h/m/s, `:`, boşluk), galaktik `l= b=`. **Eklenenler:** `J004244.3+411609` biçimi ve saniyesiz `12h30m +41d`. Aralık dışı Dec (`12h30m -95d`) artık sessizce ad aramasına düşmüyor, `DEC_OUT_OF_RANGE` hatası veriyor. `WISE J0855…` gibi adlar ad olarak kalıyor. |
+| ↳ Epsilon Indi B | **düzeltildi** (`efdc583`, canlı D6) | Kayma 6,73″; SIMBAD beklentisi 6,63″, Gaia 6,48″ → doğru. **−%84'ün nedeni bulundu:** QR3 dönemi (2026W39) açıklığın 13 pikselinden 8'i fotometri maskeli, 6'sı HALO (parlak kaynak halesi); %60 eşiği geçiyordu ve maskeli tepe pikselleri kanat ortalamasıyla doldurulunca akı ~%84 düşük çıkıyordu. ε Ind A 403″ (65 px) uzakta, 0,1° kesitin dışında; kesit boyutu (0,1/0,25°) sonucu değiştirmiyor. **Düzeltme:** merkeze 1 px içinde maskeli piksel varsa ya da açıklığın >%20'si maskeliyse fotometri yok; panelde parlaklık değerinin yanında belirgin "ölçüm güvenilir değil (yüksek maskeli piksel oranı)" uyarısı, maskeli/toplam piksel ve bayrak adlarıyla. Bu çift için artık yüzde verilmiyor; A dönemi (1/13 kanat pikseli maskeli) ölçülüyor. |
+| ↳ RW Aurigae | **var** (canlı, D2) | +%354 (18σ) parlaklık değişimi; T Tauri değişkeni için beklenen türde, ama doğrulanmadı. Kayma 2,17″ (0,35 piksel, beklenen 0,02″): ölçüm belirsizliği düzeyinde. |
+| ↳ R Draconis | **ölçülemez** (canlı, D2/D4/D5/D6) | Parlak Mira: daha uzun dalga boyları da denendi — D4 2,43 µm, D5 4,08 µm, D6 4,44 µm (en uzun bant); her iki dönemde merkez piksellerin değeri yok (doymuş). Panel artık açıkça "çekirdek doymuş, bu bantta ölçülemez" diyor; kayma ve parlaklık "ölçülemedi" (uydurma yok). |
+| ↳ WISE 0855 | **var** (canlı, D6) | Kayma 8,52″ (beklenen 8,27″); düşük S/N uyarısı; Gaia karşılığı yok (optikte çok sönük, beklenen sonuç). |
+| ↳ Görüş alanı seçici | **var** | Kesit boyutu 0,05 / 0,1 / 0,25 / 0,5°. |
+| ↳ URL'den koordinat sorgusu | **var** (`4d4b57d` ile genişletildi) | `?q=<ad ya da koordinat>` vardı; `?ra=<°>&dec=<°>` eklendi. Karşılama ekranı bunu doğrudan bağlantı sayıyor; arama sonrası URL'de `q` kalıyor. |
+| ↳ Fark görüntüsü | **var** (`faa9959` ile tamamlandı) | B − A vardı; sunucunun hesapladığı σ haritası ((B − A)/gürültü, ±5σ) fark görünümüne seçenek olarak eklendi. |
+| ↳ Canlı konum yoklama aralığı | **düzeltildi** (`4d4b57d`) | Sunucu 10 sn'de bir WS ile yayınlıyor. İstemci WS açıkken artık ilk 4 yoklamadan sonra 15 sn'de bir HTTP yedek yoklaması yapıyor (önceden 1,5 sn); 10 dk'lık işte ~400 yerine ~40 istek. WS yoksa 1,5 sn sürüyor. |
+| ↳ 3I/ATLAS eksik kesit | **düzeltildi** (`2e202b1`) | Prewarm'da zaman zaman 15–16/17 çıkıyordu: tek tük geçici IRSA hatası, sunucunun kendi yeniden denemelerinden sonra bile. Sayfa ve prewarm artık düşen kesiti bir kez (2–3 sn sonra) yeniden deniyor. |
+| ↳ Push / prewarm / health | ✅ | Beş commit ayrı ayrı push'landı; her birinden sonra prewarm 0 hata (3I/ATLAS her turda 17/17) ve health 200. `4d4b57d` turunda yeni sunucu 15 dk içinde tespit edilemedi (prewarm büyük olasılıkla eski sunucuya gitti); sonraki turlar yeni yayınları yakaladı. Canlı: `J004244.3+411609` ve `12h30m +41d` koordinat olarak çözülüyor, `12h30m -95d` → 400 `DEC_OUT_OF_RANGE`. |
+| **Referanstan 5 özellik** (2026-11-14 akşam) | aşağıda | Kaynak: `_referans/tum_guncel_kodlar.txt` (gitignore'da). Toptan birleştirme yok; canlı mimariye uyarlandı. Tek push. |
+| ↳ 1) URL + paylaşım | ✅ `fecb4b7` | `?fov=` (yalnızca 0,05/0,1/0,25/0,5), `?ta=`/`?tb=` (pozlama tarihleri, YYYY-AA-GG); "Bağlantıyı kopyala" q, d, fov, iki tarih ve karşılaştırma varsa `compare=1` içerir. Geçersiz değerler yok sayılır; `?q`, `?ra&dec`, `?d`, `compare=1` aynı. Pano engelliyse bağlantı elle kopyalamak için gösterilir. Test: `share.test.ts` (3). |
+| ↳ 2) Camgöbeği–kırmızı | ✅ `e7d2bd1` | Kırmızı = A, camgöbeği = B (A ızgarası, ortak sınırlar). Sabit not + iki λ. Kanal kuralı: CHANNEL_REJECT sonucu zaten yok; CHANNEL_WARN bu modda ayrıca uyarı. Test: `anaglyph.test.ts` (2). |
+| ↳ 5) Katalog bindirmesi + tablo | ✅ `2f332df` | AllWISE + 2MASS (IRSA), SIMBAD (CDS TAP), hepsi `http.py` üzerinden; ayrı iş `POST /compare/catalog` (karşılaştırmayı bekletmez). **Sapma:** IRSA TAP `allwise_p3as_psd` 0,07° koni için 100 sn'de yanıt vermedi (2026-11-14), `ORDER BY` ile 2MASS 3 dk sürdü; aynı sunucudaki IRSA basit konik arama (SCS, aynı tablolar) 2 sn → SCS kullanıldı, sıralama bizde. Deploy sonrası canlı testte SCS önce aralıklı, 20:10'da sürekli 502 verdi → `5bea2f2` 502 yeniden denemesi, `Gator` yedeği (aynı sunucu ve tablolar, IPAC tablosu) eklendi. Taşıma: SIMBAD öz hareketi (J2000'den), AllWISE `ra_pm/dec_pm` (MJD 55400) yalnızca öz hareket >3σ ise; 2MASS ve diğerleri "katalog dönemi konumu, taşınmadı". Önbellek anahtarı konum + yarıçap (tarih yok); eksik yanıt önbelleğe alınmaz. Etiket: en parlak 12, yıldız başına bir, çakışmasız ve kırpılmadan; üzerine gelince tam ad + dönem; satır ↔ işaret vurgusu; "Etiketleri göster". Gaia DR3 ayrı katman kaldı. Kaynaklar: AllWISE ve 2MASS IRSA metinleri (canlı doğrulandı), SIMBAD cümlesi. Testler: `test_catalog_layer.py` (4), `catalog.test.ts` (2). Canlı (yerel): Barnard alanı AllWISE 60 satır 4 sn, 2MASS 60 satır 0,8 sn, SIMBAD 10 satır 1,9 sn ("Barnard's star" adıyla). |
+| ↳ 3) Hizalanmış zaman videosu | ✅ `cbd884f` | WCS'ten teğet ızgara, kuzey yukarı / doğu solda, bilineer, maskeli pikseller NaN; önbellek `<sürüm>/aligned_north_up_v1`. Dönem başına bir kare: aynı dedektör, referans λ'ya yarım bant genişliği içinde, en fazla 4 pozlama sigma-kırpmalı medyanla; farklı λ ortalanmaz. 4 paralel indirme, ayrı hız sınırı (dk'da 4), en fazla 0,25° ve 24 kare. Not: "Görüntüleme için interpolasyon uygulandı. Gerçek çözünürlük 6.15″/piksel." Test: `test_aligned.py` (4, doğu-solda testi dahil). Canlı (yerel): Barnard D2 λ 1,20 → 3 kare, 36 sn. |
+| ↳ 4) Altı dedektör ızgarası | ✅ `da1391a` | "bant ortalaması (dedektör başına)": dedektör başına zamana yayılmış en fazla 12 kare, maskeli pikseller hariç ortalama; λ min–maks, ortalama, kare sayısı, tarih aralığı. SNR/√N iddiası yok. Not: "Hareket eden cisimler ortalamada bulanır." Test: `gridText.test.ts`. Canlı (yerel): Barnard 6×12 kare, **243 sn** (yavaş; iş ilerlemesi gösteriliyor). |
+| ↳ Push / prewarm / health | ✅ | Özellikler tek push (`54ac791`); canlı testte bulunan hatalar için 2 düzeltme push'u (`5bea2f2`, `1de0b1f`). Her birinden sonra prewarm + health ok. Yeni sunucudan hemen sonraki ilk prewarm'da zaman zaman 1 hata (barnard/luhman16/wise0855; IRSA geçici hatası), yeniden çalıştırınca 0 hata. |
+| ↳ Canlı test (5 cisim, `1de0b1f` sonrası) | ✅ | Paket: 8 metin/kod parçasının hepsi canlı JS'te var (1 ve 2 istemci tarafında); `?fov=0.25&ta=…&compare=1` ve geçersiz `?fov=abc` 200. **Barnard (D2):** kanal match 0,14, λA 1,5166 / λB 1,5116; çekirdek doymuş uyarısı; katalog AllWISE 36 + 2MASS 37 + SIMBAD 2, hata yok, yinelenen etiket yok; video 3 kare. **Epsilon Indi B (D6):** match, λ 4,5604 / 4,5604; MASKED_APERTURE (parlaklık verilmiyor); katalog AllWISE 40 + 2MASS 34 + SIMBAD 4 ("eps Ind B" etiketi); video 4 kare. **WISE 0855 (D6):** match, +%75,8 (LOW_SNR); katalog AllWISE 37 + 2MASS 42 + SIMBAD 4, "Gaia" etiketi yok; video 3 kare; 6 dedektör 313 sn, D1–D6 12'şer kare (λ 0,75–4,98 µm). **RW Aur (D2):** match 0,28; MASKED_APERTURE; katalog AllWISE 34 + 2MASS 35 + SIMBAD 6; video 3 kare; 6 dedektör 231 sn, 12'şer kare. **R Dra (D2):** match 0,22; çekirdek doymuş; katalog AllWISE 9 + 2MASS 20 + SIMBAD 2; video 3 kare. 20:10–20:30 arası IRSA SIA ve SCS 502 verdi (site `UPSTREAM_BUSY` gösterdi); IRSA düzelince hepsi geçti. 6 dedektör ızgarası yalnızca WISE 0855 ve RW Aur'da canlı denendi (yerelde Barnard da: 243 sn). |
+| ↳ Açık sorunlar | — | (1) IRSA kesintisi (SIA ve SCS 502, 2026-11-14 20:10–20:30): IRSA tarafında; site hatayı "IRSA meşgul" olarak gösterdi, katalog için Gator yedeği var, gözlem listesi için yok. (2) 6 dedektör ızgarası yavaş: 230–315 sn (72 kesit). (3) Video kareleri az (3–4): kanal kuralı gereği yalnızca aynı kanaldaki dönemler alınıyor; bu bilinçli. (4) AllWISE'ın parlak, hızlı yıldızlar için öz hareketi güvenilir değil (Barnard: AllWISE −1630/+13703 mas/yıl, SIMBAD −802/+10362): taşınan AllWISE konumu SIMBAD'dan ayrılabiliyor; ad eşleşmesi o zaman kurulamıyor. (5) ~~Kaynaklar sayfasında Gator yedeği yazılı değil~~ → `dfaa961` ile kapandı. |
+| ↳ Alınmayanlar | — | WISE karıştırma tuvali, "HiPS2FITS" ipucu, sabit "Gökyüzü Yörünge İzi", "Sıfır Halüsinasyon" rozeti, iddialı asistan cümleleri, "İlk kareye göre fark", geri bildirim formu, boş Excel "Hareket" sayfası. SSS'deki teleskop karşılaştırması nötr cümleyle değiştirildi. |
+| **Hızlı hedefler** (donma 23:00'e kaydırıldı) | ✅ `4c315c2` | Arama çubuğunun altında 8 düğme: Barnard Yıldızı, WISE 0855−0714, Epsilon Indi B, RW Aurigae, R Draconis, 3I/ATLAS, Andromeda Galaksisi (M31), Orion Bulutsusu (M42), her birinde kısa not (tr/en i18n). Tık mevcut arama akışını çalıştırır (yazıp "Ara"ya basmakla aynı; yeni API yok). Satır dar ekranda alt satıra kayar; Kaynaklar/Admin sayfalarında gizli. 8 sorgunun hepsi canlı `/resolve`'da doğru cisme çözülüyor. Test: `QuickTargets.test.tsx` (2). |
+| **Kaynaklar: AllWISE/2MASS erişimi** | ✅ `dfaa961` | "IRSA konik arama (SCS), başarısız olursa IRSA Gator yedeği" (tr) ve İngilizce karşılığı (`purpose_en`, site İngilizceyken gösterilir). SIMBAD TAP olarak kaldı. SOURCES.md eşitlendi; test metni sabitliyor. Açık sorun (5) kapandı. |
+| **ESLint** | ✅ `26f1d4f` | Eski 3 uyarı temizlendi (`decodeCutout` → `lib/cutout.ts`, Workspace `visits` useMemo); `--max-warnings 0` geçiyor. |
+| **Sıradaki iş** | ⏸ bekleniyor | Kullanıcı onayı. Donma 23:00; sonrasında yalnızca hata düzeltme, test ve belge. |
+
+## Admin paneli (2f): nerede kaldık — 2026-11-14
+
+**Bitenler** (`32a2723`, testler: arka uç 119, ön uç 22, tsc/ESLint/ruff temiz, push'landı)
+- Arka uç `api/v1/admin.py`, tümü yalnızca `ADMIN_EMAIL` oturumuyla (yoksa 401, başka hesap 403 `ADMIN_ONLY`):
+  - `GET /admin/summary`: kullanıcı sayısı, son 24 saatin olayları (türlere göre), ziyaret sayısı, yeni geri bildirim, e-posta modu.
+  - `GET /admin/users`: e-posta, kayıt, son giriş, kayıtlı öğe ve olay sayısı.
+  - `GET /admin/events?group=search|compare|download|account|feedback&before_id=&limit=`: kısa oturum öneki ve kullanıcı e-postası gösterilir, **IP özeti hiç gösterilmez**.
+  - `GET /admin/feedback?status=`, `POST /admin/feedback/{id}/status` (`new`/`read`/`done`).
+  - `GET /admin/releases`: `releases.toml`'dan sürümler (salt okunur; açma/kapama yalnızca dosyadan) + önbellek boyutları.
+  - `POST /admin/cache/refresh {scope}`: kapsam bir sürüm kimliği, `external` ya da `all` olabilir. Kapsamlar sabit listeden seçilir, önbellek kökünün dışına çıkılamaz (`../etc` ve `_index` → 400). Görüntü dizini (`_index`) yalnızca `all` ile silinir.
+- **Canlı akış:** WebSocket `admin` konusuna yalnızca admin oturumu abone olabilir (çerez + `ADMIN_EMAIL`, bağlantı başına bir kez denetlenir).
+  - Kaydedilen her olay ve her geri bildirim anında yayınlanır. `publish_nowait` senkron uç noktalardan da çalışır; izleyen admin yoksa hiçbir şey gönderilmez.
+  - Olaylara giriş yapan kullanıcının kimliği (`user_id`) eklenir.
+- **Ön uç:** `/#admin` (ayrı paket, 13 KB). Sekmeler: Özet, Canlı etkinlik (grup filtresi; soket kapalıysa 15 sn'de bir HTTP yenileme), Kullanıcılar, Geri bildirimler (durum düğmeleri), Veri sürümleri (önbellek boyutları + onaylı "Önbelleği yenile"). "Hesabım" penceresinde yöneticiye "Yönetici paneli" bağlantısı görünür.
+- **Yazarken düzeltilen hata:** canlı olay mesajında olay türü `type` alanına yazılıyor ve mesaj türünü (`admin_event`) eziyordu; arama/karşılaştırma olayları arayüze hiç ulaşmayacaktı. Alan `event_type` oldu, iki tarafta da testi var.
+
+**Kalanlar**
+1. **Canlıda yönetici girişiyle elle deneme** (kullanıcı): Hesabım → Yönetici paneli → beş sekme. Özellikle Canlı etkinlik: başka bir sekmede arama yapınca satır anında üste gelmeli (WS).
+2. ~~"İndirme" grubu, Excel (2h) gelene kadar boş kalacak.~~ Excel `09fdb06` ile geldi; indirmeler bu grupta görünür.
+3. Olay listesinde "daha eski" sayfalama düğmesi yok (API `before_id` destekliyor); şimdilik son 100 olay.
+4. Kullanıcı ayrıntısı (tek kullanıcının olayları) ve geri bildirime yanıt yok (kapsamda istenmedi).
+5. Prewarm canlıda en son `32a2723`'ten **önce** çalıştırıldı; bu yayın önbelleği sildi. Demodan önce yeniden çalıştırılmalı: `tools\prewarm.py --base https://spherex-izleyici.onrender.com --only <cisim>` (cisim cisim).
+
+**Bilinen hatalar / riskler**
+- **Render yeniden başlatması (çözülmedi):** 2026-11-13 20:42–20:50 UTC arasında prewarm sırasında sunucu yeniden başladı, önbellek silindi ve iş kayboldu (`UNKNOWN_JOB`).
+  - Yerel ölçümde bellek en fazla 162 MB (sınır 512 MB). Ücretsiz planın 0,1 CPU'su yüzünden sağlık kontrolünün zaman aşımına uğraması daha olası, ama **doğrulanmadı**.
+  - Kullanıcıdan Render → Events'teki mesaj bekleniyor. "Health check failed" ise yapılacaklar: VOTable ayrıştırmasını `to_thread`'e almak, başlık okumayı en fazla 8 paralelle sınırlamak.
+  - Cisim cisim prewarm (00:09–00:12) sorunsuz geçti.
+- Sunucu tarafı olaylar (arama, karşılaştırma, kayıt, önbellek yenileme) yalnızca gizlilik bildirimini kabul eden ziyaretçilerde kaydedilir (KVKK kararı). Geri bildirimler ve (Excel gelince) indirmeler her zaman görünür. Bu yüzden canlı akış tüm trafiği göstermez; panelde not olarak yazıyor.
+- `admin/cache/refresh` işlemi olay günlüğüne yalnızca admin tarayıcısı izin verdiyse düşer.
+- Bellek içi işler ve hız sınırları her yayında ve yeniden başlatmada sıfırlanır (tek örnek tasarımı).
+
+## Önceki oturumdan devralınan 3 iş (bitti / plana taşındı)
+
+1. ✅ **Yayın (2026-11-13):** https://spherex-izleyici.onrender.com — depo `github.com/ortak6530/spherex-izleyici`, Render Blueprint (web + `spherex-db`), `autoDeploy`. Duman testi: `/api/v1/health` → `{"status":"ok","db":"ok"}`; M31 ve 3I/ATLAS çözümleme, MOST işi (364 kare) canlıda çalışıyor; güvenlik başlıkları ve `Secure` çerez var. Kalan: uyku önleyici zamanlayıcı (cron-job.org, 10 dk'da bir `/api/v1/health`).
+2. **3I/ATLAS hareketli cisim görünümü (MOST).**
+   - ✅ Arka uç (`915471d`): `providers/most.py`, `GET /moving/{tanım}/frames` (job + WS), `POST /moving/cutout` (cisme ortalı kesit, ayrı hız sınırı). MOST'a ad değil SBDB tanımı (`des`) verilir: "Ceres" belirsiz → 400, `1`/`433`/`2P`/`2025 N1` çalışır. MOST bitişi 2026-10-16'ya kırpıyor.
+   - ✅ Ön uç (`features/MovingView.tsx`): dönem + dedektör seçimi (kare sayılarıyla), kesitler 3'er paralel yüklenir ve geldikçe gösterilir (en fazla 40), oynat/duraklat, ←/→/boşluk, hız 1/2/4 kare/sn, zaman kaydırıcısı, her karede zaman, RA/Dec, λ, r, Δ, faz, V, FITS bağlantısı; ortak parlaklık ölçeği seçeneği; dönemin ±3 günlük gök yolu grafiği. Varsayılan: öngörülen en parlak dönem + D5 (CO₂ 4,26 µm).
+   - Başsız Edge (CDP, gerçek zamanlı) ile doğrulandı: 3I/ATLAS Aralık 2025 D5 → 17/17 kare ~60 sn'de, cisim karenin ortasında net; Ağustos 2025'te (Δ 2,8 AU) tek karede seçilmiyor.
+3. **Geri bildirim butonu + arama çubuğunda otomatik öneri** → §4e madde 1d.
+
+## Bitenler
+
+| Alan | Durum |
+|---|---|
+| Faz 0 | Canlı doğrulama (`DATA_SOURCES.md`), mimari, kararlar, doğrulama betikleri (`tools/phase0_verify`) |
+| Faz 1 iskeleti | FastAPI + React/Vite/TS/Tailwind, i18n (tr/en), koyu uzay teması, three.js Samanyolu (yoğunluk dalgası + diferansiyel dönüş), gizlilik bildirimi (KVKK), olay günlüğü (`event`), anonim oturum çerezi, IP hash'i, güvenlik başlıkları, Dockerfile + `render.yaml` |
+| Veri katmanı | Koordinat ayrıştırıcı (tüm biçimler, 22 test); Sesame, SIMBAD (ayna listesi), JPL SBDB, Wikidata/Vikipedi; SIA2 kapsamı; HTTP Range ile hedefteki λ (SIP'siz); IRSA kesitleri; sürüme duyarlı bayrak şeması (MP_/MSKN); disk önbelleği |
+| Zaman karşılaştırması | Hizalama, arka plan, göreli normalleştirme, fark ve σ haritası, kayma (px ve ″, yön), açıklık fotometrisi (+%3 sistematik), kanal eşleşmesi (S5), atmosferik çizgi ve sürüm uyarıları, QR2→QR3 akı düzeltmesi, öz hareketle hedef konumu; arayüzde yan yana, yanıp sönme, kaydırma ve fark görünümleri ile sonuç paneli; `?q=&d=&compare=1` paylaşılabilir bağlantı |
+| Cisim–cisim karşılaştırması | `POST /compare/objects` + arayüz: aynı türden öneriler, farklı tür uyarısı, aynı kanal ve boyut, ortak/bağımsız ölçek, SIMBAD + SPHEREx (µJy, AB) tablosu |
+| Bilgi paneli | SIMBAD + Vikipedi (önce tr, yoksa en), her satırda kaynak etiketi, "bilinmiyor" |
+| Jobs + WS | Yavaş işler `job_id` döndürür; ilerleme `/ws` üzerinden, HTTP yoklaması her zaman yedek; istemci otomatik yeniden bağlanır |
+| Sürümler | **DR1 + QR3 varsayılan**, QR2 `superseded` (`DECISIONS.md` §4c); `announced = false` iken "resmî duyuru bekleniyor" notu gösterilir |
+| Araçlar | `tools/check_release.py <sürüm>` (DR1 raporu `DECISIONS.md` §4c'de) |
+| Testler | Arka uç **52 geçti** (pytest), ruff temiz · Ön uç **7 geçti** (vitest), `tsc` temiz, ESLint 0 hata / 3 uyarı (fast-refresh) |
+
+Commit'ler: `6c64a06` Faz 0 → `0a60c43` Faz 1 → `31f65ff` veri katmanı → `68375db` zaman karşılaştırması → `fe07311` arayüz → `bb9f1cc` DR1 + cisim karşılaştırması (arka uç) → `f841f16` cisim karşılaştırması arayüzü.
+
+## Son test sonuçları (canlı veri)
+
+**Barnard Yıldızı, D5, DR1 → QR3** (2025-08-25 → 2026-09-22, 393 gün, aynı tarama yönü)
+
+| | Ölçülen | Beklenen (SIMBAD öz hareketi) |
+|---|---|---|
+| Kayma | **12,50″ (2,04 piksel)** | **11,18″ (1,82 piksel)** |
+| Yön | 347° | ~356° |
+
+- Fark **0,22 piksel**. Δλ = 5 nm (bant genişliğinin 0,14'ü), "aynı kanal".
+- Sürüm uyarısı yok, çünkü iki görüntü de R7 kalibrasyonunda.
+- Fotometri yapılamadı: çekirdek doymuş/maskeli (`NO_PHOTOMETRY`).
+
+**WISE 0855 ile Luhman 16, D6** (cisim–cisim karşılaştırması)
+
+| | WISE 0855 (DR1, 2025-11-14) | Luhman 16 (QR3, 2026-05-25) |
+|---|---|---|
+| λ | 4,736 µm | 4,740 µm (Δλ 3,9 nm, aynı kanal) |
+| Akı | 562 ± 236 µJy (S/N 2,4 → düşük S/N uyarısı) | 150 047 ± 4 580 µJy |
+| AB kadiri | **17,03** | **10,96** |
+
+- Değerler WISE W2 parlaklıklarıyla tutarlı (yaklaşık AB 17,2 ve 10,9).
+- Uyarı: farklı tür. SIMBAD Luhman 16'yı `**` (çift/çoklu sistem) olarak sınıflandırıyor; WISE 0855 ise `BD*`.
+
+**`tools/check_release.py dr1`:** DR1 düzeni QR3 (R7) ile aynı ✓. M31 (DR1 içinde) −1,6 ± 4,2 %, değişim yok ✓. Barnard (DR1 içinde, zıt tarama yönleri) fark 0,64 piksel ✗; bkz. bilinen sorunlar.
+
+## Bilinen sorunlar
+
+1. ~~Site henüz yayında değil.~~ 2026-11-13'te yayına alındı (Render). Ücretsiz planda 15 dk sonra uyku; zamanlayıcı henüz kurulmadı.
+2. **Ağırlık merkezi sapması (doymuş yıldızlar):** Barnard'da zıt tarama yönündeki dönemler arasında 0,64 piksel uyumsuzluk var. Doymuş/maskeli çekirdek ağırlık merkezini maskesiz tarafa çekiyor. Çözüm: cilalama E1 (doymuş çekirdeği dışlayan PSF uydurma).
+3. **Parlak yıldızlarda fotometri yok:** D2 ve D5'te Barnard'ın çekirdeği doymuş, parlaklık farkı "ölçülemedi" olarak gösteriliyor (uydurma yok).
+4. **Arayüz tarayıcıda uçtan uca doğrulanmadı.** Başsız Edge karşılaştırma sonucunu bekleyemedi (sanal saat); kullanıcı tarayıcıda kontrol edecek. API düzeyinde test edildi.
+5. **IRSA yavaşlığı:** Bir cisim ve bant için ilk gözlem işi 30–60 sn, kesit 15–45 sn, ilk spektrum 2 dk civarı sürüyor; ara sıra 503 dönüyor (yeniden deneme var). `tools/prewarm.py` var.
+6. **CDS Strasbourg'da SIMBAD kesintisi:** CfA aynası kullanılıyor; aynı-tür sorgusu yaklaşık 10 sn (24 saat önbellek). CfA aynası `ILIKE` desteklemiyor.
+7. **Windows'ta `uvicorn --reload` takılıyor:** kod değişince sunucuyu elle yeniden başlatın.
+8. **Cisim karşılaştırması uyarılarında "Dönem A/B" ifadesi** cisimler için de kullanılıyor; "Cisim A/B" olarak düzeltilmeli.
+9. ~~**DR1:** DOI ve derin alan koleksiyon adı henüz bilinmiyor.~~ 2026-11-14'te çözüldü: DOI IRSA678/679, `spherex_dr1_deep`, `announced = true`.
+10. Vikipedi özeti ara sıra zaman aşımına uğruyor (8 sn). Panel "şu an erişilemeyen kaynak" diyor.
+11. `docs/demo_reference.html` (asistan görünüm örneği) klasörde yok.
+12. Samanyolu: merkezde küçük bir kare izi görüldü (yalnızca SwiftShader'da görülmüş olabilir); ince ayar cilalamaya bırakıldı.
+13. **Her yayın Render disk önbelleğini siliyor:** demo cisimleri soğuk başlar. **Kural:** her push'tan sonra prewarm. Görüntü dizininin silinmesi artık hata vermiyor (`find_image`). Son prewarm `1bb81fb` sonrası; bu belge push'u da yayın tetikler ve ardından yine prewarm yapılır.
+14. ~~**Arşiv güncelliği yayından sonra ~4 dk boş**~~ Çözüldü (`1bb81fb`): veritabanından anında yükleniyor. Yalnızca boş bir veritabanında ilk kontrol (~2 dk) beklenir.
+19. **`ruff format` eski migration dosyalarını biçimledi** (`0001`–`0004`, `alembic/env.py`; `1bb81fb`). Yalnızca biçim değişti; `alembic upgrade head` ve `alembic check` temiz.
+15. ~~**Canlı konum işi panel açıkken 1,5 sn'de bir HTTP yoklaması yapıyor**~~ `4d4b57d` ile WS açıkken 15 sn.
+20. ~~Epsilon Indi B parlaklık farkı şüpheli (−%84)~~ **Çözüldü (`efdc583`):** neden HALO maskeli çekirdek + maskeli piksellerin kanat ortalamasıyla doldurulmasıydı. Kalan sınırlama: çekirdeği maskeli ya da doymuş hedeflerde (Epsilon Indi B'nin QR3 dönemi, R Draconis tüm bantlarda) parlaklık hiç verilmiyor.
+21. `tools/` altındaki eski betiklerde 59 ruff bulgusu var (önceden de vardı, lint'e hiç sokulmamışlardı); `prewarm.py` temiz.
+16. **Asistan ve Excel yalnızca Türkçe;** İngilizce arayüzde de cevaplar Türkçe (panel notu söylüyor).
+17. **Tarayıcıda elle bakılmayanlar:** karşılama ekranı, yarı saydam paneller (masaüstü / telefon), durum çubuğu, spektrum, filtreler, canlı konum, hareket izi, asistan, Excel düğmesi, admin paneli. Ekran görüntüsü kuralı (§4e) nedeniyle kullanıcı kontrol edecek.
+18. ESLint'te 3 uyarı (hata değil): `CutoutView` ve `ExcelButton` fast-refresh dışa aktarımı, `Workspace` `useMemo` bağımlılığı.
+
+## Bekleyen talimatlar (tam liste)
+
+Kaynaklar: `DECISIONS.md` §2, §4b, §4d. **Geçerli öncelik sırası §4d'dedir.**
+
+1. **Yayın:** GitHub + Render. Boş site ilk 2 saat içinde yayına alınmalıydı (gecikti). Ücretsiz planın uyku sorunu ve çözümü `docs/DEPLOY.md`'de.
+2. **Arayüz eksikleri**
+   - 3I/ATLAS ve diğer hareketli cisimler: MOST ile kareler ve kare kare oynatma.
+   - Geri bildirim butonu: kategori, mesaj, isteğe bağlı e-posta; bağlam (sayfa/cisim/sürüm) otomatik eklenir.
+   - Otomatik öneri (§4d): yerel Türkçe ad listesi (JSON) + SIMBAD `ident` + JPL; 2 karakter, 250 ms, en fazla 8; koordinatta "Bu koordinatta ara"; klavye ve ARIA; SIMBAD yoksa yalnızca yerel liste.
+3. **WebSocket altyapısı:**
+   - Temel kısım bitti (`/ws`, iş ilerlemesi, yeniden bağlanma).
+   - Kalanlar: asistan cevaplarının akışı ve admin canlı etkinlik akışı (oturumla yetkilendirilmiş `admin` konusu). HTTP yedeği her zaman çalışmalı.
+4. **Hesaplar (EmailJS)**
+   - Sunucu 6 haneli kod üretir; kod hash'li saklanır, 10 dk geçerlidir.
+   - Kod başına en fazla 5 deneme, e-posta başına saatte en fazla 3 gönderim.
+   - Gönderim `POST https://api.emailjs.com/api/v1.0/email/send` ile, `accessToken` (private key) kullanılarak. Şablon değişkenleri `to_email`, `code`.
+   - Kayıtlı çalışmalar ve cisim listesi.
+   - **Cuma öğlene kadar.**
+5. **Admin paneli**
+   - Kullanıcılar; arama, karşılaştırma ve indirme etkinlikleri (canlı); geri bildirimler.
+   - Admin rolü `.env`'deki `ADMIN_EMAIL` ile belirlenir.
+   - "Veri sürümleri" bölümü ve "önbelleği yenile" düğmesi.
+   - **Cuma öğlene kadar.**
+6. **Excel (openpyxl)**
+   - Dosya adı `cisimadi_YYYY-MM-DD.xlsx`.
+   - Sayfalar: Özet, Gözlemler, Zaman karşılaştırması, Cisim karşılaştırması, Hareket.
+   - Formül enjeksiyonu koruması (`=`, `+`, `-`, `@` ile başlayan hücrelerin başına `'`); en fazla 5.000 satır; ham piksel yok, FITS bağlantısı var.
+   - Misafir tek cisim, giriş yapan kullanıcı çoklu cisim indirebilir; indirmeler admin akışında görünür; filtreler uygulanır.
+7. **Asistan (kural tabanlı, dış yapay zekâ yok)**
+   - Sağ kenarda açılan panel; hızlı soru düğmeleri.
+   - Türkçe normalizasyon + anahtar kelime eşleştirme; `assistant_faq.json`.
+   - "Karşılaştırmayı yorumla": yalnızca `comparison` tablosundaki gerçek değerlerle.
+   - "Yazıyor…" efekti ve panel notu.
+   - Bir arayüz arkasında durmalı (ileride dil modeli eklenebilir).
+   - SSS'ye "Görüntü neden pikselli?" sorusu eklenecek (E7).
+8. **Gözlem filtreleri + veri kalitesi satırı:** tarih aralığı, veri sürümü, λ aralığı (Excel'e de uygulanır); görüntünün altında maskeli piksel oranı ve uygulanan düzeltmeler.
+9. **Canlı konum (§4d):** yıldızlar için öz hareketle bugünkü RA/Dec; Güneş Sistemi için JPL Horizons, 10 sn'de bir WS ile; şehir seçimiyle "Benim gökyüzümde" (yükseklik, yön, doğuş/batış), tarayıcı konum izni yok.
+10. ~~**Hubble ↔ Webb**~~ — **iptal edildi (kapsam dışı)**, 2026-11-14 (DECISIONS §4g).
+11. **DR1 / yeni veri hazırlığı**
+    - `docs/NEW_DATA.md` (adım adım kılavuz) ve `tools/prewarm.py`.
+    - DR1 duyurulunca `announced = true`.
+    - Sistem beklenmedik veride çökmeden eski sürümle devam etmeli.
+12. **Cilalama (E1–E8)**
+    1. PSF uydurma (doymuş çekirdek dışlanır).
+    2. Beklenen yön ve görüntüde iki işaret (beklenen ve ölçülen konum).
+    3. "Gri: güvenilmez/maskelenmiş piksel" açıklaması.
+    4. Daha büyük görüntüleyici.
+    5. Halk için sade özet ve uyum işareti.
+    6. Yumuşatılmış/ham piksel seçeneği.
+    7. "Görüntü neden pikselli?" SSS sorusu.
+    8. Galaksi ince ayarı.
+13. **Çalışma biçimi:** dosyalar yalnızca Edit/Write ile değiştirilir; komutlar proje kökünden çalıştırılır; her adım test edilip commit'lenir.
+
+Takvim: kesin kapsam **Cuma akşamına** kadar yayında ve test edilmiş olmalı. Cumartesiye yeni özellik bırakılmaz.
+
+## Yerelde çalıştırma (hatırlatma)
+
+```powershell
+# proje kökünden
+backend\.venv\Scripts\python.exe -m uvicorn skytracker.main:app --host 127.0.0.1 --port 8000   # http://127.0.0.1:8000
+cd frontend; npm run build; cd ..                                                                 # ön uç değişince
+```
