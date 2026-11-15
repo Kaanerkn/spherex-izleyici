@@ -13,7 +13,7 @@ from ...http import UpstreamError
 from ...providers import simbad
 from ...security import TokenBucket
 from ...services.object_compare import compare_objects
-from ...services.time_compare import compare_time, field_overlay
+from ...services.time_compare import compare_time
 from .sky import CUTOUT_SIZES
 
 router = APIRouter(prefix="/compare", tags=["compare"])
@@ -89,28 +89,6 @@ async def time_compare(req: TimeCompareRequest, request: Request) -> dict:
         return result
 
     return {"job_id": jobs.start("compare_time", run)}
-
-
-class CatalogRequest(BaseModel):
-    image_id: str = Field(pattern=IMAGE_ID)  # epoch A of the comparison: its grid and date are used
-    ra: float = Field(ge=0, lt=360)
-    dec: float = Field(ge=-90, le=90)
-    size_deg: float = 0.1
-
-
-@router.post("/catalog")
-async def catalog_overlay(req: CatalogRequest, request: Request) -> dict:
-    """AllWISE, 2MASS and SIMBAD sources in the cutout field, on epoch A's pixel grid (separate job, so a
-    slow catalogue never holds up the comparison itself)."""
-    if not _limiter.allow(request.state.session_id):
-        raise HTTPException(429, {"code": "RATE_LIMITED"})
-    if req.size_deg not in CUTOUT_SIZES:
-        raise HTTPException(400, {"code": "INVALID_SIZE"})
-
-    async def run(progress):
-        return await field_overlay(req.image_id, req.ra, req.dec, req.size_deg, progress)
-
-    return {"job_id": jobs.start("catalog", run)}
 
 
 class ObjectRef(BaseModel):

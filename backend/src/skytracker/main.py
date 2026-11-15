@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -17,7 +16,6 @@ from .api.v1 import router as api_router
 from .config_loader import attributions, demo_targets, releases, upstreams
 from .db import session_scope
 from .events import purge_old
-from .realtime import manager as ws_manager
 from .realtime import router as ws_router
 from .security import SecurityHeadersMiddleware, SessionMiddleware
 from .settings import get_settings
@@ -28,7 +26,6 @@ log = logging.getLogger("skytracker")
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     s = get_settings()
-    ws_manager.bind_loop(asyncio.get_running_loop())  # lets sync endpoints push admin events
     # Fail fast on broken configuration rather than at the first request
     releases(), upstreams(), demo_targets(), attributions()
     if s.is_production and (not s.secret_key or not s.ip_hash_salt):
@@ -40,15 +37,7 @@ async def lifespan(_app: FastAPI):
                 log.info("purged %d events older than %d days", n, s.event_retention_days)
     except Exception:  # noqa: BLE001 - DB may not be migrated yet in a fresh dev checkout
         log.exception("event retention purge failed (did you run 'alembic upgrade head'?)")
-    # Newest observation in the archive (for the assistant), checked in the background every 12 h
-    fresh_task = None
-    if s.archive_freshness_check:
-        from .services import freshness
-
-        fresh_task = asyncio.create_task(freshness.run_forever())
     yield
-    if fresh_task:
-        fresh_task.cancel()
     from .http import http
 
     await http.aclose()

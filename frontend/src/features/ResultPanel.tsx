@@ -1,95 +1,19 @@
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import SaveButton from "../components/SaveButton";
-import type { SavedItem } from "../lib/auth";
 import { fmt, warningText } from "../lib/format";
-
-/** Warnings that explain a missing brightness value; shown prominently next to it. */
-const PHOT_FAILURES = new Set(["MASKED_APERTURE", "SATURATED_OR_MASKED_CORE", "NO_PHOTOMETRY"]);
 import type { TimeCompareResult } from "./compareTypes";
 
 function Stat({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-space-950/35 p-3">
+    <div className="rounded-xl border border-white/10 bg-space-950/50 p-3">
       <p className="text-xs text-ink-400">{label}</p>
       <p className="mt-1 font-mono text-sm text-ink-100">{children}</p>
     </div>
   );
 }
 
-const pct = (p: number | null | undefined) =>
-  p === null || p === undefined ? "—" : p < 0.001 ? "< %0,1" : `%${fmt(p * 100, 1)}`;
-
-/** Gaia DR3: candidate counterpart (never presented as a sure match) and parallax-corrected motion. */
-function GaiaSection({ r }: { r: TimeCompareResult }) {
-  const { t } = useTranslation();
-  const g = r.gaia;
-  if (!g) return null;
-  if ("unavailable" in g) return <p className="text-xs text-ink-400">{t("gaia.unavailable")}</p>;
-  const tg = g.target;
-  return (
-    <div className="space-y-2 rounded-xl border border-white/10 bg-space-950/35 p-3 text-sm">
-      <h4 className="font-semibold text-ink-100">{t("gaia.title")}</h4>
-      {tg ? (
-        <>
-          <p className="text-ink-300">
-            {t("gaia.candidate", {
-              id: tg.source_id,
-              g: fmt(tg.g_mag, 2),
-              sep: fmt(tg.separation_2016_arcsec, 2),
-              p: pct(tg.chance_probability),
-              pr: pct(tg.chance_probability_radius),
-              r: fmt(tg.match_radius_arcsec, 2),
-            })}
-          </p>
-          <p className="text-xs text-ink-400">
-            {t("gaia.probHow", {
-              n: g.n_field,
-              g: g.g_limit,
-              rf: fmt(g.radius_deg * 3600, 0),
-              rho: fmt(g.n_field / (Math.PI * (g.radius_deg * 60) ** 2), 2),
-              sep: fmt(Math.max(tg.separation_2016_arcsec, 0.1), 2),
-              r: fmt(tg.match_radius_arcsec, 2),
-            })}
-          </p>
-          <p className="text-ink-300">
-            {tg.has_pm
-              ? t("gaia.astrometry", {
-                  plx: tg.parallax_mas === null ? t("gaia.noData") : `${fmt(tg.parallax_mas, 2)} mas`,
-                  pm: `${fmt(tg.pmra_mas_yr, 1)} / ${fmt(tg.pmdec_mas_yr, 1)} mas/yıl`,
-                })
-              : t("gaia.noMotion")}
-          </p>
-          {tg.expected_shift_arcsec !== null && (
-            <p className="text-ink-100">
-              {t("gaia.expected", {
-                exp: fmt(tg.expected_shift_arcsec, 2),
-                meas: r.shift ? fmt(r.shift.arcsec, 2) : "—",
-                diff: tg.difference_px === null ? "—" : fmt(tg.difference_px, 2),
-                sepa: tg.separation_a_arcsec === null ? "—" : fmt(tg.separation_a_arcsec, 2),
-              })}
-            </p>
-          )}
-        </>
-      ) : (
-        <p className="text-ink-300">{t("gaia.noCandidate", { sep: fmt(g.nearest_separation_arcsec, 1) })}</p>
-      )}
-      <p className="text-xs text-ink-400">
-        {t("gaia.field", { n: g.n_field, g: g.g_limit, shown: g.markers.length })} {g.note} ({g.source};{" "}
-        {g.epoch})
-      </p>
-    </div>
-  );
-}
-
-export default function ResultPanel({
-  r,
-  save,
-}: {
-  r: TimeCompareResult;
-  save?: { label: string; data: SavedItem["data"] };
-}) {
+export default function ResultPanel({ r }: { r: TimeCompareResult }) {
   const { t } = useTranslation();
   const ph = r.photometry;
   const chip = r.channel.status === "match" ? "bg-ok-400/15 text-ok-400" : "bg-warn-400/15 text-warn-400";
@@ -100,7 +24,6 @@ export default function ResultPanel({
         <h3 id="result-title" className="font-display text-lg font-semibold text-ink-100">
           {t("result.title")}
         </h3>
-        {save && <SaveButton kind="comparison" refId={r.id} label={save.label} data={save.data} />}
         <span className={`rounded-full px-3 py-1 text-xs font-medium ${chip}`}>
           {t(`workspace.channelMatch.${r.channel.status}`)} ·{" "}
           {t("workspace.deltaLambda", {
@@ -130,19 +53,6 @@ export default function ResultPanel({
           {ph.change
             ? `${ph.change.percent >= 0 ? "+" : ""}${fmt(ph.change.percent, 1)} ± ${fmt(ph.change.err_percent, 1)} %`
             : t("result.noBrightness")}
-          {!ph.change &&
-            r.warnings
-              .filter((w) => PHOT_FAILURES.has(w.code))
-              .map((w, i) => (
-                <span
-                  key={`pf-${i}`}
-                  role="note"
-                  className="mt-1 flex items-start gap-1.5 rounded-lg border border-warn-400/40 bg-warn-400/10 px-2 py-1 text-xs font-medium text-warn-400"
-                >
-                  <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                  {warningText(t, w)}
-                </span>
-              ))}
           {ph.change_normalized && (
             <span className="block text-xs text-ink-400">
               {t("result.brightnessNorm")}: {fmt(ph.change_normalized.percent, 1)} ±{" "}
@@ -164,8 +74,6 @@ export default function ResultPanel({
             : "—"}
         </Stat>
       </div>
-
-      <GaiaSection r={r} />
 
       {r.warnings.length > 0 && (
         <div>

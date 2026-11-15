@@ -19,11 +19,10 @@ function Ext({ href, children }: { href: string; children: React.ReactNode }) {
 }
 
 function SourceCard({ a }: { a: Attribution }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const planned = a.status === "planned";
-  const purpose = i18n.language.startsWith("en") && a.purpose_en ? a.purpose_en : a.purpose;
   return (
-    <li className="rounded-xl border border-white/10 bg-space-950/35 p-4">
+    <li className="rounded-xl border border-white/10 bg-space-950/50 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-display text-lg font-semibold text-ink-100">{a.title}</h3>
         <span
@@ -34,11 +33,10 @@ function SourceCard({ a }: { a: Attribution }) {
           {planned ? t("sources.planned") : t("sources.used")}
         </span>
       </div>
-      {purpose && <p className="mt-1 text-sm text-ink-300">{purpose}</p>}
+      {a.purpose && <p className="mt-1 text-sm text-ink-300">{a.purpose}</p>}
       {a.text && (
         <figure className="mt-3">
-          {/* Acknowledgements are quoted verbatim in the provider's English original, never translated */}
-          <blockquote lang="en" className="border-l-2 border-nebula-400/60 pl-3 text-sm text-ink-100">
+          <blockquote className="border-l-2 border-nebula-400/60 pl-3 text-sm text-ink-100">
             {a.text}
           </blockquote>
           {a.text_source && (

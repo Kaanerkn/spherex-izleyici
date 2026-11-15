@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from ... import jobs
 from ...events import log_action
-from ...providers import most, ssois
+from ...providers import most
 from ...providers import spherex as S
 from ...security import TokenBucket
 from .sky import CUTOUT_SIZES, build_cutout
@@ -63,27 +63,6 @@ async def frames(
     return {"job_id": jobs.start("moving_frames", run)}
 
 
-@router.get("/{designation:path}/ssois")
-async def other_telescopes(
-    request: Request,
-    designation: str = Path(max_length=40),
-    kind: str | None = Query(default=None, max_length=4, pattern="^[a-z]{1,4}$"),
-) -> dict:
-    """Start a job: archive images of other telescopes that could contain the body (CADC SSOIS)."""
-    if not _limiter.allow(request.state.session_id):
-        raise HTTPException(429, {"code": "RATE_LIMITED"})
-    des = " ".join(designation.split())
-    if not most.DESIGNATION_RE.match(des):
-        raise HTTPException(400, {"code": "INVALID_NAME"})
-    log_action(request, "ssois", object_key=des)
-
-    async def run(progress):
-        await progress("ssois_query", {"designation": des})
-        return await ssois.search(des, kind)
-
-    return {"job_id": jobs.start("ssois", run)}
-
-
 class FrameCutoutRequest(BaseModel):
     image_id: str = Field(max_length=80, pattern=r"^[a-z0-9]+:[0-9A-Za-z_]+:D[1-6]$")
     ra: float = Field(ge=0, lt=360)
@@ -99,12 +78,11 @@ async def frame_cutout(req: FrameCutoutRequest, request: Request) -> dict:
         raise HTTPException(429, {"code": "RATE_LIMITED"})
     if req.size_deg not in CUTOUT_SIZES:
         raise HTTPException(400, {"code": "INVALID_SIZE", "allowed": CUTOUT_SIZES})
+    img = S.get_image(req.image_id)
+    if img is None:
+        raise HTTPException(404, {"code": "UNKNOWN_IMAGE"})
 
     async def run(progress):
-        # The frame contains the predicted position, so a coverage query there re-indexes it if needed
-        img = await S.find_image(req.image_id, req.ra, req.dec, progress)
-        if img is None:
-            raise jobs.JobError("UNKNOWN_IMAGE")
         await progress("cutout_request", {"image_id": img.image_id})
         return await build_cutout(img, req.ra, req.dec, req.size_deg, req.zodi)
 

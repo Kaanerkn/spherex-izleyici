@@ -1,17 +1,9 @@
 import { GitCompareArrows, Image as ImageIcon, Info, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
-import CutoutView, { type DecodedCutout } from "../components/CutoutView";
-import { decodeCutout } from "../lib/cutout";
-import ExcelButton from "../components/ExcelButton";
-import ObsFilterBar from "../components/ObsFilterBar";
-import QualityLine from "../components/QualityLine";
-import ProgressLine from "../components/ProgressLine";
-import SaveButton from "../components/SaveButton";
+import CutoutView, { decodeCutout, type DecodedCutout } from "../components/CutoutView";
 import {
-  ApiError,
   apiPost,
   type CutoutResult,
   type ObservationImage,
@@ -21,20 +13,14 @@ import {
 import { BANDS } from "../lib/bands";
 import { errorText, fmt, raDecText } from "../lib/format";
 import { runJob, type ProgressStep } from "../lib/jobs";
-import { lastComparison } from "../lib/lastComparison";
-import { NO_FILTERS, passes, toExport, type ObsFilters } from "../lib/obsFilters";
-import { readDate, readFov, shareUrl, SIZES } from "../lib/share";
-import ShareButton from "../components/ShareButton";
 import { percentileLimits, type Colormap, type Stretch } from "../render/image";
-import AlignedVideo from "./AlignedVideo";
 import CompareView, { ViewControls } from "./CompareView";
-import DetectorGrid from "./DetectorGrid";
 import type { TimeCompareResult } from "./compareTypes";
 import MovingView from "./MovingView";
-import NeossatPanel from "./NeossatPanel";
 import ObjectCompare from "./ObjectCompare";
 import ResultPanel from "./ResultPanel";
-import SpectrumPanel from "./SpectrumPanel";
+
+const SIZES = [0.05, 0.1, 0.25, 0.5];
 
 function usable(images: ObservationImage[]) {
   return images.filter((i) => i.wavelength_um !== null && i.on_detector);
@@ -73,32 +59,6 @@ function bestPair(imagesA: ObservationImage[], imagesB: ObservationImage[]) {
 
 const URL_PARAMS = new URLSearchParams(window.location.search);
 
-/** Data-quality line of one cutout (decodeCutout keeps the whole server response in `raw`). */
-function singleQuality(t: TFunction, c: CutoutResult): string[] {
-  return [
-    t("quality.masked", { pct: fmt(c.meta.bad_fraction * 100, 1) }),
-    c.meta.zodi === "sub" ? t("quality.zodiSub", { model: c.meta.zodi_model ?? "?" }) : t("quality.zodiRaw"),
-    t("quality.pipeline", { v: c.meta.pipeline_version ?? "?", rel: c.release.toUpperCase() }),
-  ];
-}
-
-/** Data-quality line of a time comparison: masked share per epoch and every correction applied. */
-function compareQuality(t: TFunction, r: TimeCompareResult): string[] {
-  const out = [
-    t("quality.maskedAB", { a: fmt(r.a.bad_fraction * 100, 1), b: fmt(r.b.bad_fraction * 100, 1) }),
-    r.zodi === "sub" ? t("quality.zodiSubShort") : t("quality.zodiRaw"),
-  ];
-  if (r.background.a !== null && r.background.b !== null) out.push(t("quality.background"));
-  out.push(
-    r.normalization.factor
-      ? t("quality.normalized", { k: fmt(r.normalization.factor, 3) })
-      : t("quality.notNormalized"),
-  );
-  if (r.flux_corrected_image) out.push(t("quality.fluxCorrected"));
-  if (r.warnings.some((w) => w.code === "PROPER_MOTION_APPLIED")) out.push(t("quality.properMotion"));
-  return out;
-}
-
 export default function Workspace({ target }: { target: Target }) {
   const { t } = useTranslation();
   const [detector, setDetector] = useState(() => {
@@ -113,12 +73,7 @@ export default function Workspace({ target }: { target: Target }) {
   const [visitB, setVisitB] = useState(0);
   const [imgA, setImgA] = useState<string | null>(null);
   const [imgB, setImgB] = useState<string | null>(null);
-  const [size, setSize] = useState(() => readFov(window.location.search) ?? 0.1);
-  // Shared link dates (?ta=&tb=): used once, on the first observation list
-  const urlDates = useRef<{ ta: string | null; tb: string | null } | null>({
-    ta: readDate(window.location.search, "ta"),
-    tb: readDate(window.location.search, "tb"),
-  });
+  const [size, setSize] = useState(0.1);
   const [zodi, setZodi] = useState(true);
   const [normalize, setNormalize] = useState(true);
   const [busy, setBusy] = useState<"view" | "compare" | null>(null);
@@ -126,26 +81,8 @@ export default function Workspace({ target }: { target: Target }) {
   const [result, setResult] = useState<TimeCompareResult | null>(null);
   const [stretch, setStretch] = useState<Stretch>("asinh");
   const [cmap, setCmap] = useState<Colormap>("inferno");
-  const [filters, setFilters] = useState<ObsFilters>(NO_FILTERS);
-  // "Görüntü bilgisi bulunamadı": the server re-indexes by itself; if it still fails, redo the search
-  // once without showing an error, keep the chosen pair and repeat the action
-  const [reload, setReload] = useState(0);
-  const retried = useRef(false);
-  const pendingView = useRef(false);
-  const keepPair = useRef<{ a: string | null; b: string | null } | null>(null);
 
   const progressText = (s: ProgressStep) => t(`workspace.progress.${s.step}`, { ...s, defaultValue: s.step });
-
-  const retryOnce = (e: unknown, action: "view" | "compare") => {
-    if (!(e instanceof ApiError) || e.code !== "UNKNOWN_IMAGE" || retried.current) return false;
-    retried.current = true;
-    keepPair.current = { a: imgA, b: imgB };
-    if (action === "compare") autoCompare.current = true;
-    else pendingView.current = true;
-    setStep(t("workspace.progress.research"));
-    setReload((n) => n + 1);
-    return true;
-  };
 
   // Observations (coverage + wavelength at the target) whenever the target or detector changes
   useEffect(() => {
@@ -161,26 +98,8 @@ export default function Workspace({ target }: { target: Target }) {
       .then((r) => {
         setObs(r);
         if (!r.visits.length) return;
-        // After a silent re-search keep the user's pair if both exposures still exist
-        const keep = keepPair.current;
-        keepPair.current = null;
-        const where = (id: string | null) =>
-          r.visits.findIndex((v) => v.images.some((i) => i.image_id === id));
-        if (keep && where(keep.a) >= 0 && where(keep.b) >= 0) {
-          setVisitA(where(keep.a));
-          setVisitB(where(keep.b));
-          setImgA(keep.a);
-          setImgB(keep.b);
-          return;
-        }
-        const dates = urlDates.current;
-        urlDates.current = null;
-        const onDate = (day: string | null | undefined) =>
-          day ? r.visits.findIndex((v) => v.images.some((i) => i.date_obs.startsWith(day))) : -1;
-        const ia = onDate(dates?.ta);
-        const ib = onDate(dates?.tb);
-        const a = ia >= 0 ? ia : 0;
-        const b = ib >= 0 ? ib : r.visits.length - 1;
+        const a = 0;
+        const b = r.visits.length - 1;
         setVisitA(a);
         setVisitB(b);
         const pair = bestPair(r.visits[a].images, r.visits[b].images);
@@ -193,28 +112,9 @@ export default function Workspace({ target }: { target: Target }) {
       .finally(() => setStep(null));
     return () => ctrl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.key, target.ra, target.dec, detector, reload]);
+  }, [target.key, target.ra, target.dec, detector]);
 
-  const visits = useMemo(() => obs?.visits ?? [], [obs]);
-  // Observation filters (date / release / λ): the lists show only passing exposures; Excel gets the same
-  const imagesOf = (vi: number) => (visits[vi]?.images ?? []).filter((i) => passes(filters, i));
-  const shownVisits = visits.map((v, i) => ({ v, i })).filter(({ i }) => imagesOf(i).length > 0);
-  const shownCount = shownVisits.reduce((n, { i }) => n + imagesOf(i).length, 0);
-  const totalCount = visits.reduce((n, v) => n + v.images.length, 0);
-  const applyFilters = (f: ObsFilters) => {
-    setFilters(f);
-    if (!visits.length) return;
-    const keep = (vi: number) => (visits[vi]?.images ?? []).filter((i) => passes(f, i));
-    const idx = visits.map((_, i) => i).filter((i) => keep(i).length > 0);
-    if (!idx.length) return;
-    const va = idx.includes(visitA) ? visitA : idx[0];
-    const vb = idx.includes(visitB) ? visitB : idx[idx.length - 1];
-    setVisitA(va);
-    setVisitB(vb);
-    const pair = bestPair(keep(va), keep(vb));
-    setImgA(pair?.a.image_id ?? usable(keep(va))[0]?.image_id ?? null);
-    setImgB(pair?.b.image_id ?? null);
-  };
+  const visits = obs?.visits ?? [];
   const a = useMemo(
     () => visits[visitA]?.images.find((i) => i.image_id === imgA) ?? null,
     [visits, visitA, imgA],
@@ -240,19 +140,19 @@ export default function Workspace({ target }: { target: Target }) {
   const pickA = (id: string) => {
     setImgA(id);
     const img = visits[visitA].images.find((i) => i.image_id === id);
-    if (img?.wavelength_um) setImgB(closest(imagesOf(visitB), img.wavelength_um)?.image_id ?? null);
+    if (img?.wavelength_um) setImgB(closest(visits[visitB].images, img.wavelength_um)?.image_id ?? null);
   };
   const pickVisitB = (v: number) => {
     setVisitB(v);
-    if (a?.wavelength_um) setImgB(closest(imagesOf(v), a.wavelength_um)?.image_id ?? null);
+    if (a?.wavelength_um) setImgB(closest(visits[v].images, a.wavelength_um)?.image_id ?? null);
   };
   const pickVisitA = (v: number) => {
     setVisitA(v);
-    const list = usable(imagesOf(v));
-    const pick = a?.wavelength_um ? closest(imagesOf(v), a.wavelength_um) : list[0];
+    const list = usable(visits[v].images);
+    const pick = a?.wavelength_um ? closest(visits[v].images, a.wavelength_um) : list[0];
     if (pick) {
       setImgA(pick.image_id);
-      setImgB(closest(imagesOf(visitB), pick.wavelength_um!)?.image_id ?? null);
+      setImgB(closest(visits[visitB].images, pick.wavelength_um!)?.image_id ?? null);
     }
   };
 
@@ -275,7 +175,7 @@ export default function Workspace({ target }: { target: Target }) {
       );
       setSingle(decodeCutout(c));
     } catch (e) {
-      if (!retryOnce(e, "view")) setError(errorText(t, e));
+      setError(errorText(t, e));
     } finally {
       setBusy(null);
       setStep(null);
@@ -304,9 +204,8 @@ export default function Workspace({ target }: { target: Target }) {
         (s) => setStep(progressText(s)),
       );
       setResult(r);
-      lastComparison.set(r.id);
     } catch (e) {
-      if (!retryOnce(e, "compare")) setError(errorText(t, e));
+      setError(errorText(t, e));
     } finally {
       setBusy(null);
       setStep(null);
@@ -315,11 +214,6 @@ export default function Workspace({ target }: { target: Target }) {
 
   // Shareable link ?compare=1: run the comparison once the default pair is known
   useEffect(() => {
-    if (pendingView.current && a) {
-      pendingView.current = false; // repeat "Görüntüle (A)" after the silent re-search
-      const id = window.setTimeout(() => void view(), 0);
-      return () => window.clearTimeout(id);
-    }
     if (!autoCompare.current || !a || !b || a.image_id === b.image_id) return;
     autoCompare.current = false;
     const id = window.setTimeout(() => void compare(), 0);
@@ -340,33 +234,9 @@ export default function Workspace({ target }: { target: Target }) {
     <section className="space-y-4" aria-labelledby="ws-title">
       <div className="glass space-y-4 rounded-2xl p-5">
         <div>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h2 id="ws-title" className="font-display text-2xl font-semibold text-ink-100">
-              {target.name}
-            </h2>
-            <div className="flex flex-wrap items-center gap-2">
-              <ShareButton
-                url={shareUrl({
-                  q: target.kind === "coordinate" ? (target.query ?? target.name) : target.name,
-                  d: detector,
-                  fov: size,
-                  ta: a?.date_obs.slice(0, 10),
-                  tb: b?.date_obs.slice(0, 10),
-                  compare: result !== null,
-                })}
-              />
-              <SaveButton
-                kind="object"
-                refId={target.key}
-                label={target.name}
-                data={{ q: target.kind === "coordinate" ? target.query : target.name, d: detector }}
-              />
-              <ExcelButton
-                items={[{ q: target.kind === "coordinate" ? target.query : target.name, d: detector }]}
-                filters={toExport(filters)}
-              />
-            </div>
-          </div>
+          <h2 id="ws-title" className="font-display text-2xl font-semibold text-ink-100">
+            {target.name}
+          </h2>
           <p className="font-mono text-sm text-ink-300">
             {raDecText(target.ra!, target.dec!)} · {target.otype ?? ""} · {target.source}
           </p>
@@ -402,7 +272,11 @@ export default function Workspace({ target }: { target: Target }) {
           </div>
         </fieldset>
 
-        {step && <ProgressLine text={step} />}
+        {step && (
+          <p className="flex items-center gap-2 text-sm text-nebula-300" role="status">
+            <Loader2 className="size-4 animate-spin" aria-hidden="true" /> {step}
+          </p>
+        )}
         {error && (
           <p className="text-sm text-danger-400" role="alert">
             {error}
@@ -415,14 +289,6 @@ export default function Workspace({ target }: { target: Target }) {
             <p className="text-sm text-ink-300">
               {t("workspace.visits", { n: visits.length, total: obs?.total_images ?? 0 })}
             </p>
-            <ObsFilterBar
-              value={filters}
-              onChange={applyFilters}
-              releases={Object.entries(obs?.releases ?? {}).map(([id, r]) => ({ id, label: r.label }))}
-              shown={shownCount}
-              total={totalCount}
-            />
-            {shownVisits.length === 0 && <p className="text-sm text-warn-400">{t("filters.empty")}</p>}
             <div className="grid gap-4 md:grid-cols-2">
               {(["A", "B"] as const).map((which) => {
                 const vi = which === "A" ? visitA : visitB;
@@ -439,7 +305,7 @@ export default function Workspace({ target }: { target: Target }) {
                         value={vi}
                         onChange={(e) => (which === "A" ? pickVisitA : pickVisitB)(Number(e.target.value))}
                       >
-                        {shownVisits.map(({ v, i }) => (
+                        {visits.map((v, i) => (
                           <option key={v.label + i} value={i}>
                             {v.label} ({v.start} – {v.end}) · {v.releases.join("+").toUpperCase()}
                           </option>
@@ -453,7 +319,7 @@ export default function Workspace({ target }: { target: Target }) {
                         value={cur ?? ""}
                         onChange={(e) => (which === "A" ? pickA(e.target.value) : setImgB(e.target.value))}
                       >
-                        {imagesOf(vi).map((i) => (
+                        {visits[vi]?.images.map((i) => (
                           <option
                             key={i.image_id}
                             value={i.image_id}
@@ -574,44 +440,19 @@ export default function Workspace({ target }: { target: Target }) {
               })}
             </p>
           )}
-          <QualityLine items={singleQuality(t, single.raw as unknown as CutoutResult)} />
         </div>
       )}
 
       {result && (
         <>
-          <div className="glass space-y-3 rounded-2xl p-5">
-            <CompareView key={result.id} result={result} />
-            <QualityLine items={compareQuality(t, result)} />
+          <div className="glass rounded-2xl p-5">
+            <CompareView result={result} />
           </div>
-          <ResultPanel
-            r={result}
-            save={{
-              label: `${target.name} · ${result.a.date_obs.slice(0, 10)} → ${result.b.date_obs.slice(0, 10)} · D${detector}`,
-              data: { q: target.kind === "coordinate" ? target.query : target.name, d: detector },
-            }}
-          />
+          <ResultPanel r={result} />
         </>
       )}
 
-      {visits.length > 0 && (
-        <AlignedVideo
-          key={`video-${target.key}-${detector}`}
-          target={target}
-          detector={detector}
-          lamRef={a?.wavelength_um ?? null}
-          size={size}
-          zodi={zodi}
-        />
-      )}
-      {visits.length > 0 && (
-        <DetectorGrid key={`grid-${target.key}`} target={target} size={size} zodi={zodi} />
-      )}
-      {visits[visitA] && (
-        <SpectrumPanel key={`${target.key}-${visits[visitA].index}`} target={target} visit={visits[visitA]} />
-      )}
       {visits.length > 0 && <ObjectCompare target={target} imageA={imgA} size={size} zodi={zodi} />}
-      {target.ra !== undefined && <NeossatPanel key={`neo-${target.key}`} target={target} />}
     </section>
   );
 }

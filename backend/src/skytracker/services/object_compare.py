@@ -18,7 +18,7 @@ from ..http import UpstreamError
 from ..jobs import JobError
 from ..providers import simbad
 from ..providers import spherex as S
-from .time_compare import _b64, _family, _parse, photometry_failure
+from .time_compare import _b64, _family, _parse
 
 AB_ZERO_POINT_JY = 3631.0
 
@@ -73,7 +73,7 @@ def _distance(info: dict | None) -> dict | None:
 
 async def compare_objects(a: dict, b: dict, image_a: str, size: float, zodi: str, progress) -> dict:
     """a/b: {name, main_id, ra, dec, key}. image_a: the exposure already chosen for object A."""
-    ia = await S.find_image(image_a, a["ra"], a["dec"], progress)  # re-indexes after a cache wipe
+    ia = S.get_image(image_a)
     if ia is None:
         raise JobError("UNKNOWN_IMAGE")
     info_a, info_b = await asyncio.gather(_info(a.get("main_id")), _info(b.get("main_id")))
@@ -126,7 +126,7 @@ async def compare_objects(a: dict, b: dict, image_a: str, size: float, zodi: str
             arrays[tag] = img
             phot = C.aperture_flux(e.data, e.var, e.phot_bad, e.tx, e.ty, e.omega)
             if phot is None:
-                warn.append(photometry_failure(e, e.tx, e.ty, tag))
+                warn.append({"code": "NO_PHOTOMETRY", "epoch": tag})
             elif phot["err_ujy"] and phot["flux_ujy"] / phot["err_ujy"] < 5:
                 warn.append({"code": "LOW_SNR", "epoch": tag, "snr": phot["flux_ujy"] / phot["err_ujy"]})
             fin = img[np.isfinite(img)]
