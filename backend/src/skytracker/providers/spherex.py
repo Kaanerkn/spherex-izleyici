@@ -118,9 +118,43 @@ async def coverage(ra: float, dec: float, progress: Progress | None = None) -> l
     return images
 
 
+def cached_coverage_count(ra: float, dec: float) -> int | None:
+    """Number of images at (ra, dec) if every active collection is already cached; None otherwise.
+
+    Never queries IRSA (the assistant uses it to mention how many images the open object has)."""
+    total = 0
+    for rel in releases().active:
+        for coll in rel.sia_collections:
+            hit = cache.get_json(f"{rel.id}/coverage", f"{coll}_{target_key(ra, dec)}", 24 * 3600)
+            if hit is None:
+                return None
+            total += len(hit)
+    return total
+
+
 def get_image(image_id: str) -> SpherexImage | None:
     d = cache.get_json("_index/images", image_id.replace(":", "_"), None)
     return SpherexImage(**d) if d else None
+
+
+async def find_image(
+    image_id: str, ra: float, dec: float, progress: Progress | None = None
+) -> SpherexImage | None:
+    """get_image(), re-indexing once if the image is unknown.
+
+    The index lives in the disk cache, which a Render deploy or restart (or the admin's "clear all")
+    wipes while pages stay open with the old image ids -> "Görüntü bilgisi bulunamadı". Every request
+    that names an image also sends a position inside it, so the coverage query at that position
+    registers all active releases again (DR1 and QR3 of a mixed pair alike) and the lookup is retried.
+    """
+    img = get_image(image_id)
+    if img is None:
+        log.info("image %s not in the index; re-indexing at %.5f %+.5f", image_id, ra, dec)
+        if progress:
+            await progress("reindex", {"image_id": image_id})
+        await coverage(ra, dec, progress)
+        img = get_image(image_id)
+    return img
 
 
 def group_visits(images: list[SpherexImage]) -> list[dict]:
@@ -161,10 +195,18 @@ def _parse_wcs_wave_tail(tail: bytes) -> fits.BinTableHDU:
         return fits.BinTableHDU.fromstring(tail[i:])
 
 
+def _sample_slot(img: SpherexImage, ra: float, dec: float) -> tuple[str, str]:
+    return f"{img.release}/samples", f"{img.obs_id}_D{img.detector}_{target_key(ra, dec)}"
+
+
+def cached_sample(img: SpherexImage, ra: float, dec: float) -> dict | None:
+    """target_sample() only if it is already cached (no request to IRSA)."""
+    return cache.get_json(*_sample_slot(img, ra, dec), None)
+
+
 async def target_sample(img: SpherexImage, ra: float, dec: float) -> dict:
     """Detector position, wavelength and bandwidth of the target in one exposure (cached)."""
-    ns = f"{img.release}/samples"
-    key = f"{img.obs_id}_D{img.detector}_{target_key(ra, dec)}"
+    ns, key = _sample_slot(img, ra, dec)
     if (hit := cache.get_json(ns, key, None)) is not None:
         return hit
     head, tail = await asyncio.gather(

@@ -56,6 +56,44 @@ export function percentileLimits(arrays: Float32Array[], lo = 0.5, hi = 99.5): [
   return b > a ? [a, b] : [a, a + 1e-6];
 }
 
+/** Two epochs in one picture: red = first (A), cyan (green + blue) = second (B), same limits and stretch.
+ *  Unchanged sources come out grey/white; a source only in A is red, only in B cyan. Masked -> dark grey. */
+export function renderAnaglyph(
+  a: Float32Array,
+  b: Float32Array,
+  width: number,
+  height: number,
+  limits: [number, number],
+  stretch: Stretch,
+): ImageData {
+  const img = new ImageData(width, height);
+  const px = img.data;
+  const [lo, hi] = limits;
+  const span = hi - lo || 1;
+  const level = (v: number) =>
+    Math.round(stretchValue(Math.min(1, Math.max(0, (v - lo) / span)), stretch) * 255);
+  for (let y = 0; y < height; y++) {
+    const srcRow = (height - 1 - y) * width;
+    for (let x = 0; x < width; x++) {
+      const va = a[srcRow + x];
+      const vb = b[srcRow + x];
+      const o = (y * width + x) * 4;
+      if (!Number.isFinite(va) || !Number.isFinite(vb)) {
+        px[o] = 40;
+        px[o + 1] = 42;
+        px[o + 2] = 52;
+      } else {
+        const lb = level(vb);
+        px[o] = level(va);
+        px[o + 1] = lb;
+        px[o + 2] = lb;
+      }
+      px[o + 3] = 255;
+    }
+  }
+  return img;
+}
+
 /** Render into RGBA. FITS row 0 is the bottom row, so rows are flipped for the screen. */
 export function renderImage(
   data: Float32Array,

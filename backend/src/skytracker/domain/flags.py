@@ -74,6 +74,15 @@ def mask_from(flags: np.ndarray, schema: dict[str, int], names: tuple[str, ...])
     return (flags.astype(np.int64) & bits) != 0
 
 
+def flags_in(
+    flags: np.ndarray, schema: dict[str, int], region: np.ndarray, names: tuple[str, ...]
+) -> dict[str, int]:
+    """{flag name: number of pixels in region carrying it}, only for the given names, most common first."""
+    sel = flags[region].astype(np.int64)
+    out = {n: int(((sel >> schema[n]) & 1).sum()) for n in names if n in schema}
+    return dict(sorted(((k, v) for k, v in out.items() if v), key=lambda kv: -kv[1]))
+
+
 def flag_fractions(flags: np.ndarray, schema: dict[str, int]) -> dict[str, float]:
     total = flags.size or 1
     out = {}

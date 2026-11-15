@@ -3,6 +3,11 @@ import * as THREE from "three";
 
 import { GALAXY, armPitchB, detectQuality, generateGalaxy, particleBudget } from "./galaxyModel";
 
+// Background magnification (camera zoom). 1 = original framing (camera distance 1.85 landscape /
+// 2.9 portrait); 1.4 = 40 % larger (2026-11-14). The canvas is fixed full-screen, so any value >= 1
+// still covers the whole viewport; the rotation animation is unaffected.
+const GALAXY_ZOOM = 1.4;
+
 const VERTEX = /* glsl */ `
   uniform float uTime;
   uniform float uPixelRatio;
@@ -117,6 +122,7 @@ export default function GalaxyBackground() {
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 50);
+    camera.zoom = GALAXY_ZOOM;
 
     const model = generateGalaxy(particleBudget(quality));
     const geo = new THREE.BufferGeometry();
@@ -133,7 +139,7 @@ export default function GalaxyBackground() {
     const uniforms = {
       uTime: { value: 240 },
       uPixelRatio: { value: pixelRatio },
-      uSize: { value: 4.2 },
+      uSize: { value: 4.2 * GALAXY_ZOOM }, // points grow with the zoom, so the disk does not look sparser
       uOpacity: { value: 0.8 },
       uOmega0: { value: GALAXY.omega0 },
       uRSoft: { value: GALAXY.rSoft },
@@ -242,8 +248,9 @@ export default function GalaxyBackground() {
       ) : (
         <div ref={hostRef} className="h-full w-full" />
       )}
-      {/* Readability veil: keeps UI text contrast high over the brightest parts of the galaxy */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgb(5_8_22/0.35)_55%,rgb(5_8_22/0.8)_100%)]" />
+      {/* Light veil: 18 % evenly (damps the bright core under see-through panels), a soft vignette at
+          the edges. History: 0/0.35/0.8 -> 0.12/0.45/0.85 (zoom) -> 0.18/0.18/0.5 (see-through panels) */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgb(5_8_22/0.18)_0%,rgb(5_8_22/0.18)_55%,rgb(5_8_22/0.5)_100%)]" />
     </div>
   );
 }

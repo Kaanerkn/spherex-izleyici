@@ -12,6 +12,8 @@ import numpy as np
 
 ARCSEC2_TO_SR = (math.pi / 648000.0) ** 2
 SYSTEMATIC_FRACTION = 0.03  # IRSA photometry tool adds 3 % in quadrature (Explanatory Supplement, eq. 19)
+CORE_RADIUS_PX = 1.0  # any masked pixel this close to the source centre -> no photometry
+MAX_MASKED_FRACTION = 0.2  # more than this share of the aperture masked -> no photometry
 
 # Time-variable foregrounds that are NOT subtracted from SPHEREx images (Supplement sec. 2.3)
 ATMOSPHERIC_LINES_UM = {
@@ -118,10 +120,16 @@ def aperture_flux(
     r_in: float = 4.0,
     r_out: float = 7.0,
 ) -> dict | None:
-    """Background-subtracted aperture flux in µJy with statistical and 3 % systematic error."""
+    """Background-subtracted aperture flux in µJy with statistical and 3 % systematic error.
+
+    Masked pixels are filled with the mean of the good ones, which is only fair for a few pixels in
+    the wings. For a point source whose *core* is masked it underestimates badly (2026-11-14: Epsilon
+    Indi B, 8 of 13 pixels HALO-flagged in one epoch -> a spurious −84 %). So no flux is given when any
+    pixel within 1 px of the centre is masked or more than MAX_MASKED_FRACTION of the aperture is."""
     ap = disk_mask(img.shape, cx, cy, r)
     good_ap = ap & ~bad & np.isfinite(img)
-    if good_ap.sum() < max(3, 0.6 * ap.sum()):
+    core = disk_mask(img.shape, cx, cy, CORE_RADIUS_PX)
+    if (core & ~good_ap).any() or good_ap.sum() < max(3, (1 - MAX_MASKED_FRACTION) * ap.sum()):
         return None
     ann = annulus_mask(img.shape, cx, cy, r_in, r_out) & ~bad & np.isfinite(img)
     bg = float(np.median(img[ann])) if ann.sum() >= 8 else 0.0

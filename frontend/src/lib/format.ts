@@ -35,6 +35,14 @@ export function warningText(t: TFunction, w: Warning): string {
   if (typeof w.snr === "number") p.snr = w.snr.toFixed(1);
   if (Array.isArray(w.lines)) p.lines = w.lines.join(", ");
   if (w.epoch) p.epoch = String(w.epoch).toUpperCase();
+  if (w.code === "MASKED_APERTURE") {
+    const names = Array.isArray(w.flags)
+      ? w.flags.map(
+          (f) => `${t(`warnings.flagNames.${String(f)}`, { defaultValue: String(f) })} – ${String(f)}`,
+        )
+      : [];
+    p.flagList = names.length ? t("warnings.maskedFlags", { names: names.join(", ") }) : "";
+  }
   if (w.code === "CROSS_RELEASE") {
     p.a = String(w.a).toUpperCase();
     p.b = String(w.b).toUpperCase();

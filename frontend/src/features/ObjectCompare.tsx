@@ -3,9 +3,12 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import CutoutView, { type DecodedCutout } from "../components/CutoutView";
+import ProgressLine from "../components/ProgressLine";
+import SaveButton from "../components/SaveButton";
 import { apiGet, apiPost, type ResolveResponse, type Target } from "../lib/api";
 import { errorText, fmt, warningText, type Warning } from "../lib/format";
-import { runJob } from "../lib/jobs";
+import { runJob, runMaybeJob } from "../lib/jobs";
+import { lastComparison } from "../lib/lastComparison";
 import { decodeFloat32, type Colormap, type Stretch } from "../render/image";
 import { ViewControls } from "./CompareView";
 
@@ -106,10 +109,8 @@ export default function ObjectCompare({
   useEffect(() => {
     if (!target.main_id || !target.otype) return;
     const ctrl = new AbortController();
-    apiGet<{ items: Suggestion[] }>(
-      `/objects/similar?main_id=${encodeURIComponent(target.main_id)}&otype=${encodeURIComponent(target.otype)}`,
-      ctrl.signal,
-    )
+    const path = `/objects/similar?main_id=${encodeURIComponent(target.main_id)}&otype=${encodeURIComponent(target.otype)}`;
+    runMaybeJob<{ items: Suggestion[] }>(() => apiGet(path, ctrl.signal), undefined, ctrl.signal)
       .then((r) => setSuggestions(r.items))
       .catch(() => setSuggestions([]));
     return () => ctrl.abort();
@@ -160,6 +161,7 @@ export default function ObjectCompare({
         (s) => setStep(t(`workspace.progress.${s.step}`, { ...s, defaultValue: s.step })),
       );
       setResult(r);
+      lastComparison.set(r.id);
     } catch (e) {
       setMessage(errorText(t, e));
     } finally {
@@ -270,11 +272,7 @@ export default function ObjectCompare({
           {busy ? <Loader2 className="size-4 animate-spin" /> : <GitCompareArrows className="size-4" />}
           {t("objcmp.run")}
         </button>
-        {step && (
-          <span role="status" className="text-sm text-nebula-300">
-            {step}
-          </span>
-        )}
+        {step && <ProgressLine text={step} />}
       </div>
       {message && (
         <p role="alert" className="text-sm text-danger-400">
@@ -301,6 +299,12 @@ export default function ObjectCompare({
               ))}
             </div>
             <ViewControls stretch={stretch} setStretch={setStretch} cmap={cmap} setCmap={setCmap} />
+            <SaveButton
+              kind="comparison"
+              refId={result.id}
+              label={`${result.objects.a.name} ↔ ${result.objects.b.name}`}
+              data={{ q: target.name }}
+            />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {(["a", "b"] as const).map((k) => {

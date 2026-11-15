@@ -15,6 +15,7 @@ from ...config_loader import releases
 from ...events import log_action
 from ...providers import spherex as S
 from ...security import TokenBucket
+from ...services import aligned
 
 router = APIRouter(prefix="/sky", tags=["sky"])
 _limiter = TokenBucket(rate_per_min=20, burst=8)
@@ -125,6 +126,48 @@ async def observations(req: ObservationsRequest, request: Request) -> dict:
     return {"job_id": jobs.start("observations", run)}
 
 
+class SpectrumRequest(BaseModel):
+    ra: float = Field(ge=0, lt=360)
+    dec: float = Field(ge=-90, le=90)
+    visit: int = Field(ge=1, le=100)  # the visit's "index" from /sky/observations
+    object_key: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/spectrum")
+async def spectrum(req: SpectrumRequest, request: Request) -> dict:
+    """Start a job: aperture photometry at the target in every exposure of one visit (all 6 detectors)."""
+    _guard(request)
+    log_action(request, "spectrum", object_key=req.object_key, payload={"visit": req.visit})
+
+    async def run(progress):
+        from ...services.spectrum import visit_spectrum
+
+        return await visit_spectrum(req.ra, req.dec, req.visit, progress)
+
+    return {"job_id": jobs.start("spectrum", run)}
+
+
+class PositionRequest(BaseModel):
+    ra: float = Field(ge=0, lt=360)
+    dec: float = Field(ge=-90, le=90)
+    object_key: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/neossat")
+async def neossat(req: PositionRequest, request: Request) -> dict:
+    """Start a job: NEOSSat observations containing the position (CADC CAOM TAP; links only)."""
+    _guard(request)
+    log_action(request, "neossat", object_key=req.object_key)
+
+    async def run(progress):
+        from ...providers import neossat as N
+
+        await progress("neossat_query", {})
+        return await N.search(req.ra, req.dec)
+
+    return {"job_id": jobs.start("neossat", run)}
+
+
 class CutoutRequest(BaseModel):
     image_id: str = Field(max_length=80, pattern=r"^[a-z0-9]+:[0-9A-Za-z_]+:D[1-6]$")
     ra: float = Field(ge=0, lt=360)
@@ -166,15 +209,73 @@ async def cutout(req: CutoutRequest, request: Request) -> dict:
     _guard(request)
     if req.size_deg not in CUTOUT_SIZES:
         raise HTTPException(400, {"code": "INVALID_SIZE", "allowed": CUTOUT_SIZES})
-    img = S.get_image(req.image_id)
-    if img is None:
-        raise HTTPException(404, {"code": "UNKNOWN_IMAGE"})
     log_action(
-        request, "cutout", release_id=img.release, payload={"image_id": req.image_id, "size": req.size_deg}
+        request,
+        "cutout",
+        release_id=req.image_id.split(":", 1)[0],
+        payload={"image_id": req.image_id, "size": req.size_deg},
     )
 
     async def run(progress):
+        # Re-indexes once if the cache was wiped (deploy/restart) while the page was open
+        img = await S.find_image(req.image_id, req.ra, req.dec, progress)
+        if img is None:
+            raise jobs.JobError("UNKNOWN_IMAGE")
         await progress("cutout_request", {"image_id": img.image_id})
         return await build_cutout(img, req.ra, req.dec, req.size_deg, req.zodi)
 
     return {"job_id": jobs.start("cutout", run)}
+
+
+# ---------- north-up time video and six-detector grid (services/aligned.py) ----------
+
+_heavy = TokenBucket(rate_per_min=4, burst=2)  # each job reads tens of cutouts from IRSA
+STACK_MAX_SIZE = 0.25  # larger fields would make every frame several MB
+
+
+def _guard_heavy(request: Request, size: float) -> float:
+    if not _heavy.allow(request.state.session_id):
+        raise HTTPException(429, {"code": "RATE_LIMITED"})
+    if size not in CUTOUT_SIZES:
+        raise HTTPException(400, {"code": "INVALID_SIZE", "allowed": CUTOUT_SIZES})
+    return min(size, STACK_MAX_SIZE)
+
+
+class VideoRequest(BaseModel):
+    ra: float = Field(ge=0, lt=360)
+    dec: float = Field(ge=-90, le=90)
+    detector: int = Field(ge=1, le=6)
+    lam_um: float = Field(gt=0.5, lt=5.5)  # reference channel: only frames within half a bandwidth
+    size_deg: float = 0.1
+    zodi: str = Field(default="sub", pattern="^(sub|raw)$")
+    object_key: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/video")
+async def video(req: VideoRequest, request: Request) -> dict:
+    size = _guard_heavy(request, req.size_deg)
+    log_action(request, "video", object_key=req.object_key, payload={"detector": req.detector, "size": size})
+
+    async def run(progress):
+        return await aligned.time_video(req.ra, req.dec, req.detector, req.lam_um, size, req.zodi, progress)
+
+    return {"job_id": jobs.start("video", run)}
+
+
+class DetectorsRequest(BaseModel):
+    ra: float = Field(ge=0, lt=360)
+    dec: float = Field(ge=-90, le=90)
+    size_deg: float = 0.1
+    zodi: str = Field(default="sub", pattern="^(sub|raw)$")
+    object_key: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/detectors")
+async def detectors(req: DetectorsRequest, request: Request) -> dict:
+    size = _guard_heavy(request, req.size_deg)
+    log_action(request, "detector_grid", object_key=req.object_key, payload={"size": size})
+
+    async def run(progress):
+        return await aligned.six_detectors(req.ra, req.dec, size, req.zodi, progress)
+
+    return {"job_id": jobs.start("detector_grid", run)}

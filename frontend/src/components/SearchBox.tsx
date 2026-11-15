@@ -11,10 +11,11 @@ import {
   type Target,
 } from "../lib/api";
 import { track } from "../lib/events";
+import { initialQuery } from "../lib/entry";
 import { errorText } from "../lib/format";
 
-// Shareable links: ?q=<name or coordinates> runs the search on load
-const INITIAL_Q = new URLSearchParams(window.location.search).get("q") ?? "";
+// Shareable links: ?q=<name or coordinates> runs the search on load; ?ra=<deg>&dec=<deg> too
+const INITIAL_Q = initialQuery(window.location.search);
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 250;
 const MAX_ITEMS = 8;
@@ -74,7 +75,7 @@ export default function SearchBox({
         const url = new URL(window.location.href);
         if (url.searchParams.get("q") !== text) {
           url.searchParams.set("q", text);
-          ["d", "compare"].forEach((k) => url.searchParams.delete(k));
+          ["d", "compare", "ra", "dec"].forEach((k) => url.searchParams.delete(k));
           window.history.replaceState(null, "", url);
         }
         setQuery(r.target.kind === "coordinate" ? text : r.target.name);
@@ -232,7 +233,7 @@ export default function SearchBox({
       </div>
 
       <div
-        className={`glass absolute top-full right-0 left-0 z-40 mt-2 rounded-xl p-1.5 text-sm ${showList ? "" : "hidden"}`}
+        className={`glass-strong absolute top-full right-0 left-0 z-40 mt-2 rounded-xl p-1.5 text-sm ${showList ? "" : "hidden"}`}
       >
         <ul id={listId} role="listbox" aria-label={t("search.suggestLabel")}>
           {items.map((s, i) => (
@@ -280,7 +281,7 @@ export default function SearchBox({
       {(message || candidates.length > 0) && (
         <div
           role="status"
-          className="glass absolute top-full right-0 left-0 z-40 mt-2 rounded-xl p-3 text-sm"
+          className="glass-strong absolute top-full right-0 left-0 z-40 mt-2 rounded-xl p-3 text-sm"
         >
           {message && <p className="text-warn-400">{message}</p>}
           {candidates.length > 0 && (

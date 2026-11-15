@@ -109,6 +109,10 @@ class RealtimeClient {
     };
   }
 
+  isOpen(): boolean {
+    return this.status === "open";
+  }
+
   onStatus(l: (s: WsStatus) => void): () => void {
     this.statusListeners.add(l);
     l(this.status);

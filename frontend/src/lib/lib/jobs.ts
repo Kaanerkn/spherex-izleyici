@@ -1,0 +1,65 @@
+// Run a server job: live progress over WebSocket when available, HTTP polling always as a fallback.
+import { apiGet, ApiError, type JobState } from "./api";
+import { realtime } from "./realtime";
+
+export type ProgressStep = { step: string; [k: string]: unknown };
+
+const FAST_POLLS = 4;
+
+/** HTTP fallback polling interval for the i-th poll of a job. */
+export function pollDelayMs(i: number, socketOpen: boolean): number {
+  return socketOpen && i >= FAST_POLLS ? 15_000 : 1_500;
+}
+
+/** For endpoints that answer from the cache at once or return {job_id} when the work is slow. */
+export async function runMaybeJob<T extends object>(
+  start: () => Promise<T | { job_id: string }>,
+  onProgress?: (s: ProgressStep) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const first = await start();
+  const keys = Object.keys(first);
+  if (keys.length === 1 && keys[0] === "job_id") {
+    return runJob<T>(async () => first as { job_id: string }, onProgress, signal);
+  }
+  return first as T;
+}
+
+export async function runJob<T>(
+  start: () => Promise<{ job_id: string }>,
+  onProgress?: (s: ProgressStep) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const { job_id } = await start();
+  const topic = `job:${job_id}`;
+  let wake: (() => void) | null = null;
+  const off = realtime.onMessage((m) => {
+    if (m.job_id !== job_id) return;
+    if (m.type === "progress") onProgress?.(m as unknown as ProgressStep);
+    if (m.type === "job_done" || m.type === "job_error") wake?.();
+  });
+  realtime.subscribe(topic);
+  try {
+    let seen = 0;
+    for (let i = 0; i < 600; i++) {
+      if (signal?.aborted) throw new DOMException("aborted", "AbortError");
+      const j = await apiGet<JobState<T>>(`/jobs/${job_id}`);
+      // Replay steps the socket did not deliver (e.g. socket closed)
+      for (const s of j.steps.slice(seen)) onProgress?.(s);
+      seen = j.steps.length;
+      if (j.status === "done") return j.result as T;
+      if (j.status === "error") throw new ApiError(502, j.error?.code ?? "JOB_FAILED");
+      // With a live socket, steps and completion arrive over WS: after a few quick polls (a short job
+      // may finish before the subscription is in place) HTTP is only a 15 s safety net. Without a
+      // socket, poll every ~1.5 s. (A live-position job runs 10 min: ~40 polls instead of ~400.)
+      await new Promise<void>((resolve) => {
+        wake = resolve;
+        window.setTimeout(resolve, pollDelayMs(i, realtime.isOpen()));
+      });
+    }
+    throw new ApiError(504, "JOB_TIMEOUT");
+  } finally {
+    off();
+    realtime.unsubscribe(topic);
+  }
+}

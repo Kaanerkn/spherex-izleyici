@@ -1,6 +1,23 @@
 from fastapi import APIRouter
 
-from . import compare, events, feedback, health, jobs_api, meta, moving, objects, resolve, sky, suggest
+from . import (
+    admin,
+    assistant,
+    auth,
+    compare,
+    events,
+    export,
+    feedback,
+    health,
+    jobs_api,
+    live,
+    meta,
+    moving,
+    objects,
+    resolve,
+    sky,
+    suggest,
+)
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(health.router)
@@ -14,3 +31,8 @@ router.include_router(compare.router)
 router.include_router(moving.router)
 router.include_router(feedback.router)
 router.include_router(suggest.router)
+router.include_router(auth.router)
+router.include_router(admin.router)
+router.include_router(export.router)
+router.include_router(assistant.router)
+router.include_router(live.router)

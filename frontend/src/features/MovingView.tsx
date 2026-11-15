@@ -2,7 +2,11 @@ import { ChevronLeft, ChevronRight, ExternalLink, Info, Loader2, Pause, Play } f
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import CutoutView, { decodeCutout, type DecodedCutout } from "../components/CutoutView";
+import CutoutView, { type DecodedCutout } from "../components/CutoutView";
+import { decodeCutout } from "../lib/cutout";
+import ExcelButton from "../components/ExcelButton";
+import ProgressLine from "../components/ProgressLine";
+import SaveButton from "../components/SaveButton";
 import {
   apiGet,
   apiPost,
@@ -16,6 +20,7 @@ import { errorText, fmt, raDecText } from "../lib/format";
 import { runJob, type ProgressStep } from "../lib/jobs";
 import { percentileLimits, type Colormap, type Stretch } from "../render/image";
 import { ViewControls } from "./CompareView";
+import OtherTelescopes from "./OtherTelescopes";
 
 const SIZES = [0.05, 0.1, 0.25];
 const SPEEDS = [1, 2, 4];
@@ -175,22 +180,28 @@ export default function MovingView({ target }: { target: Target }) {
       while (next < todo.length && !ctrl.signal.aborted) {
         const f = todo[next++];
         const k = slotKey(f, size, zodi);
-        try {
-          const c = await runJob<CutoutResult>(
-            () =>
-              apiPost("/moving/cutout", {
-                image_id: f.image_id,
-                ra: f.ra,
-                dec: f.dec,
-                size_deg: size,
-                zodi: zodi ? "sub" : "raw",
-              }),
-            undefined,
-            ctrl.signal,
-          );
-          if (!ctrl.signal.aborted) setSlots((m) => ({ ...m, [k]: decodeCutout(c) }));
-        } catch {
-          if (!ctrl.signal.aborted) setSlots((m) => ({ ...m, [k]: "error" }));
+        // IRSA occasionally drops a cutout (timeout / 503 after the server's own retries): try once more
+        for (let attempt = 0; attempt < 2 && !ctrl.signal.aborted; attempt++) {
+          try {
+            const c = await runJob<CutoutResult>(
+              () =>
+                apiPost("/moving/cutout", {
+                  image_id: f.image_id,
+                  ra: f.ra,
+                  dec: f.dec,
+                  size_deg: size,
+                  zodi: zodi ? "sub" : "raw",
+                }),
+              undefined,
+              ctrl.signal,
+            );
+            if (!ctrl.signal.aborted) setSlots((m) => ({ ...m, [k]: decodeCutout(c) }));
+            break;
+          } catch {
+            if (ctrl.signal.aborted) break;
+            if (attempt === 1) setSlots((m) => ({ ...m, [k]: "error" }));
+            else await new Promise((r) => window.setTimeout(r, 2000));
+          }
         }
       }
     };
@@ -260,9 +271,15 @@ export default function MovingView({ target }: { target: Target }) {
     <section className="space-y-4" aria-labelledby="mv-title">
       <div className="glass space-y-4 rounded-2xl p-5">
         <div>
-          <h2 id="mv-title" className="font-display text-2xl font-semibold text-ink-100">
-            {target.name}
-          </h2>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h2 id="mv-title" className="font-display text-2xl font-semibold text-ink-100">
+              {target.name}
+            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <SaveButton kind="object" refId={target.key} label={target.name} data={{ q: target.query }} />
+              <ExcelButton items={[{ q: target.query }]} />
+            </div>
+          </div>
           <p className="text-sm text-ink-300">
             {[target.orbit_class, designation && `${t("moving.designation")}: ${designation}`, target.source]
               .filter(Boolean)
@@ -275,11 +292,7 @@ export default function MovingView({ target }: { target: Target }) {
         </div>
 
         {!designation && <p className="text-sm text-warn-400">{t("moving.noDesignation")}</p>}
-        {step && (
-          <p className="flex items-center gap-2 text-sm text-nebula-300" role="status">
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" /> {step}
-          </p>
-        )}
+        {step && <ProgressLine text={step} />}
         {error && (
           <p className="text-sm text-danger-400" role="alert">
             {error}
@@ -526,6 +539,7 @@ export default function MovingView({ target }: { target: Target }) {
           </div>
         </div>
       )}
+      {designation && <OtherTelescopes designation={designation} kind={target.body_kind} />}
     </section>
   );
 }

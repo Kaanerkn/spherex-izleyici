@@ -6,6 +6,8 @@ Accepted forms (ICRS unless galactic):
   hours/degrees        00h42m44s +41d16m09s | 0h42m44.3s 41°16'09"
   colon separated      00:42:44.3 +41:16:09
   space separated      00 42 44.3 +41 16 09
+  partial h/d          12h30m +41d | 12h30m +41d20m
+  compact J name       J004244.3+411609 (J2000 position written as in IAU names)
   galactic             l=121.17 b=-21.57 | l=121.17, b=-21.57
 Returns None when the text does not look like coordinates (then it is treated as a name).
 Raises CoordinateError for text that looks like coordinates but is out of range.
@@ -36,12 +38,14 @@ _NUM = r"[-+]?\d+(?:\.\d+)?"
 _GAL = re.compile(rf"^\s*l\s*=\s*({_NUM})\s*[,;\s]\s*b\s*=\s*({_NUM})\s*$", re.I)
 _DEC2 = re.compile(rf"^\s*({_NUM})\s*(?:d|°|deg)?\s*[,;\s]\s*({_NUM})\s*(?:d|°|deg)?\s*$", re.I)
 _TR_COMMA = re.compile(r"^\s*([-+]?\d+,\d+)\s+([-+]?\d+,\d+)\s*$")
-# 00h42m44.3s +41d16m09s  /  00h42m44s 41°16'09"
+# 00h42m44.3s +41d16m09s  /  00h42m44s 41°16'09"  /  12h30m +41d (seconds / minutes optional)
 _HMS = re.compile(
-    r"^\s*(\d{1,2})\s*h\s*(\d{1,2})\s*m\s*(\d{1,2}(?:\.\d+)?)\s*s?\s*[,;\s]\s*"
-    r"([-+]?)\s*(\d{1,2})\s*(?:d|°)\s*(\d{1,2})\s*(?:m|'|′)\s*(\d{1,2}(?:\.\d+)?)\s*(?:s|\"|″)?\s*$",
+    r"^\s*(\d{1,2})\s*h\s*(\d{1,2})\s*m(?:\s*(\d{1,2}(?:\.\d+)?)\s*s?)?\s*[,;\s]\s*"
+    r"([-+]?)\s*(\d{1,3})\s*(?:d|°)(?:\s*(\d{1,2})\s*(?:m|'|′)(?:\s*(\d{1,2}(?:\.\d+)?)\s*(?:s|\"|″)?)?)?\s*$",
     re.I,
 )
+# J004244.3+411609 / J085510.83-071442.5 (IAU-style compact position, J2000)
+_JNAME = re.compile(r"^\s*J(\d{2})(\d{2})(\d{2}(?:\.\d+)?)([+-])(\d{2})(\d{2})(\d{2}(?:\.\d+)?)\s*$", re.I)
 # 00:42:44.3 +41:16:09   or   00 42 44.3 +41 16 09
 _COLON = re.compile(
     r"^\s*(\d{1,2})[:\s](\d{1,2})[:\s](\d{1,2}(?:\.\d+)?)\s*[,;\s]\s*"
@@ -60,7 +64,8 @@ def _check(ra: float, dec: float) -> None:
 
 def _sexagesimal(m: re.Match[str]) -> tuple[float, float]:
     h, mi, s, sign, d, dm, ds = m.groups()
-    h_, mi_, s_, d_, dm_, ds_ = int(h), int(mi), float(s), int(d), int(dm), float(ds)
+    h_, mi_, s_ = int(h), int(mi), float(s or 0)
+    d_, dm_, ds_ = int(d), int(dm or 0), float(ds or 0)
     if h_ >= 24 or mi_ >= 60 or s_ >= 60:
         raise CoordinateError("RA_OUT_OF_RANGE")
     if dm_ >= 60 or ds_ >= 60 or d_ > 90:
@@ -92,7 +97,7 @@ def parse_coordinates(text: str) -> ParsedCoord | None:
         ra, dec = galactic_to_icrs(l_deg % 360.0, b_deg)
         return ParsedCoord(ra, dec, "galactic", (l_deg % 360.0, b_deg))
 
-    if m := _HMS.match(s) or _COLON.match(s):
+    if m := _HMS.match(s) or _COLON.match(s) or _JNAME.match(s):
         ra, dec = _sexagesimal(m)
         _check(ra, dec)
         return ParsedCoord(ra, dec, "sexagesimal")

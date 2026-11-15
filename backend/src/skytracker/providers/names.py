@@ -65,6 +65,20 @@ def exact_query(text: str) -> str | None:
     return None
 
 
+def find_in_text(text: str) -> dict | None:
+    """A listed object named anywhere in a sentence ("andromeda nedir" -> M31); longest name wins.
+
+    Whole words only, so "ay" does not match inside "ayni". Used by the assistant to open objects.
+    """
+    padded = f" {normalize(text)} "
+    best: tuple[int, dict] | None = None
+    for e in _entries():
+        for k in e["_keys"]:
+            if len(k) >= 3 and f" {k} " in padded and (best is None or len(k) > best[0]):
+                best = (len(k), e)
+    return None if best is None else {"name": best[1]["name"], "query": best[1]["query"]}
+
+
 def search_local(text: str, limit: int = 8) -> list[dict]:
     q = normalize(text)
     if len(q) < 2:
@@ -76,6 +90,6 @@ def search_local(text: str, limit: int = 8) -> list[dict]:
             hits.append((s, i, e))
     hits.sort(key=lambda h: (h[0], h[1]))
     return [
-        {"label": e["name"], "query": e["query"], "detail": e.get("kind"), "source": "local"}
-        for _, _, e in hits[:limit]
+        {"label": e["name"], "query": e["query"], "detail": e.get("kind"), "source": "local", "exact": s == 0}
+        for s, _, e in hits[:limit]
     ]

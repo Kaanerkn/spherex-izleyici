@@ -4,6 +4,27 @@ import { realtime } from "./realtime";
 
 export type ProgressStep = { step: string; [k: string]: unknown };
 
+const FAST_POLLS = 4;
+
+/** HTTP fallback polling interval for the i-th poll of a job. */
+export function pollDelayMs(i: number, socketOpen: boolean): number {
+  return socketOpen && i >= FAST_POLLS ? 15_000 : 1_500;
+}
+
+/** For endpoints that answer from the cache at once or return {job_id} when the work is slow. */
+export async function runMaybeJob<T extends object>(
+  start: () => Promise<T | { job_id: string }>,
+  onProgress?: (s: ProgressStep) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  const first = await start();
+  const keys = Object.keys(first);
+  if (keys.length === 1 && keys[0] === "job_id") {
+    return runJob<T>(async () => first as { job_id: string }, onProgress, signal);
+  }
+  return first as T;
+}
+
 export async function runJob<T>(
   start: () => Promise<{ job_id: string }>,
   onProgress?: (s: ProgressStep) => void,
@@ -28,10 +49,12 @@ export async function runJob<T>(
       seen = j.steps.length;
       if (j.status === "done") return j.result as T;
       if (j.status === "error") throw new ApiError(502, j.error?.code ?? "JOB_FAILED");
-      // With a live socket we are woken up on completion; otherwise poll every ~1.5 s
+      // With a live socket, steps and completion arrive over WS: after a few quick polls (a short job
+      // may finish before the subscription is in place) HTTP is only a 15 s safety net. Without a
+      // socket, poll every ~1.5 s. (A live-position job runs 10 min: ~40 polls instead of ~400.)
       await new Promise<void>((resolve) => {
         wake = resolve;
-        window.setTimeout(resolve, 1500);
+        window.setTimeout(resolve, pollDelayMs(i, realtime.isOpen()));
       });
     }
     throw new ApiError(504, "JOB_TIMEOUT");

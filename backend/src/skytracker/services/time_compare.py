@@ -27,10 +27,12 @@ from astropy.wcs.utils import proj_plane_pixel_scales
 from ..config_loader import releases
 from ..domain import compare as C
 from ..domain import flags as F
-from ..domain.astrometry import propagate
+from ..domain.astrometry import jyear_to_mjd, propagate
 from ..domain.wavelength import celestial_wcs, wave_wcs
 from ..jobs import JobError
+from ..providers import catalogs, gaia
 from ..providers import spherex as S
+from . import catalog_layer, gaia_layer
 
 
 def proj_plane_pixel_area_matrix(wcs) -> np.ndarray:
@@ -58,6 +60,8 @@ class Epoch:
     omega: float
     zodi_median: float
     pixel_scale: float
+    flags: np.ndarray | None = None
+    schema: dict | None = None
 
 
 def _family(release_id: str) -> str:
@@ -101,7 +105,90 @@ def _parse(img: S.SpherexImage, raw: bytes, ra: float, dec: float, zodi: str) ->
         omega=float(ih.get("OMEGA_MEDIAN") or 37.82),
         zodi_median=float(np.nanmedian(z)),
         pixel_scale=float(np.sqrt(abs(np.linalg.det(proj_plane_pixel_area_matrix(cw)))) * 3600),
+        flags=fl,
+        schema=schema,
     )
+
+
+def photometry_failure(e: Epoch, cx: float, cy: float, tag: str) -> dict:
+    """Why aperture_flux gave nothing at (cx, cy): a saturated core (no pixel values), a masked aperture
+    (with the flags responsible, e.g. HALO of a bright neighbour) or simply too few valid pixels."""
+    ap = C.disk_mask(e.data.shape, cx, cy, 2.0)
+    n_ap = int(ap.sum())
+    core = C.disk_mask(e.data.shape, cx, cy, C.CORE_RADIUS_PX)
+    if (core & ~np.isfinite(e.data)).any():
+        return {"code": "SATURATED_OR_MASKED_CORE", "epoch": tag}
+    masked = ap & e.phot_bad
+    n_masked = int(masked.sum())
+    if n_masked:
+        names = F.flags_in(e.flags, e.schema, masked, F.PHOTOMETRY_MASK) if e.flags is not None else {}
+        return {
+            "code": "MASKED_APERTURE",
+            "epoch": tag,
+            "masked": n_masked,
+            "total": n_ap,
+            "fraction": n_masked / n_ap if n_ap else None,
+            "core_masked": bool((core & e.phot_bad).any()),
+            "flags": list(names),
+        }
+    return {"code": "NO_PHOTOMETRY", "epoch": tag}
+
+
+async def field_overlay(image_id: str, ra: float, dec: float, size: float, progress) -> dict:
+    """Catalogue overlay (AllWISE, 2MASS, SIMBAD) on the grid of one comparison epoch. The cutout is the
+    one the comparison already fetched (disk cache), so only the catalogues are new requests."""
+    img = S.get_image(image_id) or await S.find_image(image_id, ra, dec, progress)
+    if img is None:
+        raise JobError("UNKNOWN_IMAGE")
+    raw = await S.fetch_cutout_fits(img, ra, dec, size)
+    e = await asyncio.to_thread(_parse, img, raw, ra, dec, "raw")
+    await progress("catalog", {})
+    field = await catalogs.field(ra, dec, size * 0.5 * math.sqrt(2))
+    return await asyncio.to_thread(catalog_layer.build, field, e.wcs, e.mjd, (ra, dec), e.data.shape)
+
+
+async def _gaia_field(ra: float, dec: float, radius_deg: float, near: tuple[float, float]) -> dict | None:
+    try:
+        return await gaia.cone(ra, dec, radius_deg, near)
+    except Exception:  # noqa: BLE001 - Gaia is an extra layer; the comparison stands without it
+        return None
+
+
+TRACK_EPOCHS = (2010.0, 2016.0)  # WISE era and Gaia DR3 reference epoch
+
+
+def motion_track(pm: dict | None, ea: Epoch, eb: Epoch, shift: dict | None) -> dict | None:
+    """Expected positions from the known proper motion at 2010.0, 2016.0 and the two SPHEREx dates, plus
+    the measured centroids, all as pixels of A's grid (B is resampled onto it). Display only: the line is
+    the expected position, not a measurement."""
+    if not pm or pm.get("ra_j2000") is None or not (pm.get("pmra_mas_yr") or pm.get("pmdec_mas_yr")):
+        return None
+
+    def px(ra: float, dec: float) -> list[float]:
+        x, y = ea.wcs.world_to_pixel_values(ra, dec)
+        return [round(float(x), 2), round(float(y), 2)]
+
+    def expected(label: str, mjd: float) -> dict:
+        ra, dec = propagate(
+            pm["ra_j2000"], pm["dec_j2000"], pm.get("pmra_mas_yr"), pm.get("pmdec_mas_yr"), mjd
+        )
+        return {"label": label, "mjd": mjd, "px": px(ra, dec)}
+
+    pts = [expected(f"{y:.1f}", jyear_to_mjd(y)) for y in TRACK_EPOCHS]
+    pts += [expected("A", ea.mjd), expected("B", eb.mjd)]
+    pts.sort(key=lambda p: p["mjd"])
+    measured = []
+    if shift:
+        measured = [
+            {"label": "A", "px": px(*shift["a_centroid"])},
+            {"label": "B", "px": px(*shift["b_centroid"])},
+        ]
+    return {
+        "expected": pts,
+        "measured": measured,
+        "source": "SIMBAD J2000 + öz hareket (paralaks ihmal)",
+        "note": "Çizgi, bilinen hareketten hesaplanan beklenen konumdur; ölçüm değildir.",
+    }
 
 
 async def _apply_flux_correction(e: Epoch) -> bool:
@@ -145,7 +232,9 @@ async def compare_time(
     proper_motion: dict | None,
     progress,
 ) -> dict:
-    ia, ib = S.get_image(image_a), S.get_image(image_b)
+    # Both epochs contain the search position; one coverage query re-indexes both (e.g. DR1 A + QR3 B)
+    ia = await S.find_image(image_a, ra, dec, progress)
+    ib = S.get_image(image_b) or await S.find_image(image_b, ra, dec, progress)
     if ia is None or ib is None:
         raise JobError("UNKNOWN_IMAGE")
     if ia.image_id == ib.image_id:
@@ -162,6 +251,17 @@ async def compare_time(
         pos_b = propagate(
             pm["ra_j2000"], pm["dec_j2000"], pm.get("pmra_mas_yr"), pm.get("pmdec_mas_yr"), ib.t_start_mjd
         )
+    # Gaia DR3 field (cutout half-diagonal) runs while the cutouts download; failure never blocks
+    ref_2016 = (ra, dec)
+    if pm.get("ra_j2000") is not None:
+        ref_2016 = propagate(
+            pm["ra_j2000"],
+            pm["dec_j2000"],
+            pm.get("pmra_mas_yr"),
+            pm.get("pmdec_mas_yr"),
+            jyear_to_mjd(2016.0),
+        )
+    gaia_task = asyncio.create_task(_gaia_field(ra, dec, size * 0.5 * math.sqrt(2), ref_2016))
     raw_a, raw_b = await asyncio.gather(
         S.fetch_cutout_fits(ia, ra, dec, size), S.fetch_cutout_fits(ib, ra, dec, size)
     )
@@ -237,15 +337,12 @@ async def compare_time(
                 "a_centroid": [ra_a, dec_a],
                 "b_centroid": [ra_b, dec_b],
             }
-        fa = C.aperture_flux(ea.data, ea.var, ea.phot_bad, *(ca or (ea.tx, ea.ty)), ea.omega)
-        fb = C.aperture_flux(eb.data, eb.var, eb.phot_bad, *(cb or (eb.tx, eb.ty)), eb.omega)
-        for f, e, tag in ((fa, ea, "a"), (fb, eb, "b")):
+        pa_xy, pb_xy = ca or (ea.tx, ea.ty), cb or (eb.tx, eb.ty)
+        fa = C.aperture_flux(ea.data, ea.var, ea.phot_bad, *pa_xy, ea.omega)
+        fb = C.aperture_flux(eb.data, eb.var, eb.phot_bad, *pb_xy, eb.omega)
+        for f, e, xy, tag in ((fa, ea, pa_xy, "a"), (fb, eb, pb_xy, "b")):
             if f is None:
-                core_px = C.disk_mask(e.data.shape, e.tx, e.ty, 2.0)
-                nan_core = int((core_px & ~np.isfinite(e.data)).sum())
-                warn.append(
-                    {"code": "SATURATED_OR_MASKED_CORE" if nan_core else "NO_PHOTOMETRY", "epoch": tag}
-                )
+                warn.append(photometry_failure(e, *xy, tag))
         change = C.percent_change(fa, fb)
         change_norm = None
         if change and k:
@@ -322,7 +419,26 @@ async def compare_time(
 
     # Display geometry (N/E arrows, scale bar) comes from A's grid, which both images now share
     orient = S._sky_orientation(ea.wcs, *ea.data.shape)  # noqa: SLF001 - shared helper
+    track = motion_track(proper_motion, ea, eb, analysis.get("shift"))
+    field = await gaia_task
+    gaia = None
+    if field is not None:
+        sh = analysis.get("shift")
+        gaia = await asyncio.to_thread(
+            gaia_layer.build,
+            field,
+            ea.wcs,
+            ea.mjd,
+            eb.mjd,
+            ref_2016,
+            tuple(sh["a_centroid"]) if sh else None,
+            sh,
+            ea.pixel_scale,
+            ea.data.shape,
+        )
     return {
+        "track": track,
+        "gaia": gaia if gaia is not None else {"unavailable": True, "source": "ESA Gaia DR3"},
         "id": secrets.token_hex(8),
         "kind": "time",
         "target": {"ra": ra, "dec": dec},

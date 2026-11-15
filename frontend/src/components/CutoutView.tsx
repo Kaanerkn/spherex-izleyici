@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { CutoutResult } from "../lib/api";
-import { decodeFloat32, renderImage, type Colormap, type Stretch } from "../render/image";
+import { CAT_COLOR, placeLabels, type CatalogItem } from "../lib/catalog";
+import { renderAnaglyph, renderImage, type Colormap, type Stretch } from "../render/image";
 
 export interface DecodedCutout {
   raw: Pick<CutoutResult, "width" | "height"> & { meta: ViewMeta };
@@ -15,10 +16,6 @@ export type ViewMeta = Pick<
   "unit" | "target_px" | "wavelength_um" | "date_obs" | "north_deg" | "east_deg" | "pixel_scale_arcsec"
 >;
 
-export function decodeCutout(c: CutoutResult): DecodedCutout {
-  return { raw: c, data: decodeFloat32(c.data_b64), lambda: decodeFloat32(c.lambda_b64) };
-}
-
 interface Props {
   cutout: DecodedCutout;
   data?: Float32Array; // override (e.g. difference image on the same grid)
@@ -28,7 +25,34 @@ interface Props {
   label?: string;
   unit?: string;
   showOverlays?: boolean;
+  track?: MotionTrack | null;
+  gaia?: GaiaOverlay | null;
+  /** Second epoch on the same grid: renders red (cutout) / cyan (anaglyphB) instead of the colormap. */
+  anaglyphB?: Float32Array | null;
+  catalog?: CatalogOverlay | null;
 }
+
+/** AllWISE / 2MASS / SIMBAD markers on A's grid, with collision-free name labels for the brightest. */
+export type CatalogOverlay = {
+  items: CatalogItem[];
+  showLabels: boolean;
+  highlight: string | null;
+  onHover?: (key: string | null) => void;
+};
+
+/** Gaia DR3 candidate markers and the target's parallax-corrected expected positions (pixels of A). */
+export type GaiaOverlay = {
+  markers: { source_id: string; px: [number, number] }[];
+  expected?: { label: string; px: [number, number] }[];
+};
+
+/** Expected positions from the known motion (server, A's grid) and the measured centroids. */
+export type MotionTrack = {
+  expected: { label: string; mjd: number; px: [number, number] }[];
+  measured: { label: string; px: [number, number] }[];
+  source: string;
+  note: string;
+};
 
 /** One SPHEREx cutout on a canvas (pixelated), with scale bar, N/E arrows and a hover readout. */
 export default function CutoutView({
@@ -40,6 +64,10 @@ export default function CutoutView({
   label,
   unit,
   showOverlays = true,
+  track = null,
+  gaia = null,
+  anaglyphB = null,
+  catalog = null,
 }: Props) {
   const { t } = useTranslation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -52,8 +80,13 @@ export default function CutoutView({
     if (!cv) return;
     cv.width = w;
     cv.height = h;
-    cv.getContext("2d")?.putImageData(renderImage(pixels, w, h, limits, stretch, cmap), 0, 0);
-  }, [pixels, w, h, limits, stretch, cmap]);
+    const ctx = cv.getContext("2d");
+    if (!ctx) return; // no canvas (tests)
+    const img = anaglyphB
+      ? renderAnaglyph(pixels, anaglyphB, w, h, limits, stretch)
+      : renderImage(pixels, w, h, limits, stretch, cmap);
+    ctx.putImageData(img, 0, 0);
+  }, [pixels, anaglyphB, w, h, limits, stretch, cmap]);
 
   // Overlay geometry in native pixel units (SVG viewBox = image size; y axis points down on screen)
   const overlay = useMemo(() => {
@@ -73,6 +106,31 @@ export default function CutoutView({
       target: [meta.target_px[0] + 0.5, h - (meta.target_px[1] + 0.5)] as const,
     };
   }, [meta, w, h]);
+
+  // Catalogue labels: brightest candidates from the server, placed without overlap and never clipped
+  const catFont = w * 0.03;
+  const catItems = catalog?.items;
+  const catShowLabels = catalog?.showLabels ?? false;
+  const labels = useMemo(() => {
+    if (!catItems || !catShowLabels) return [];
+    const cands = catItems
+      .filter((i) => i.labelled)
+      .map((i) => ({ key: i.key, text: i.label, x: i.px[0] + 0.5, y: h - (i.px[1] + 0.5) }));
+    return placeLabels(cands, w, h, catFont, w * 0.02);
+  }, [catItems, catShowLabels, w, h, catFont]);
+  // Catalogue source under the pointer (within 1.5 px): full name in the readout, row highlighted
+  const hoverItem =
+    hover && catalog
+      ? (catalog.items
+          .map((i) => ({ i, d: Math.hypot(i.px[0] - hover.x, i.px[1] - (h - 1 - hover.y)) }))
+          .filter((x) => x.d <= 1.5)
+          .sort((a, b) => a.d - b.d)[0]?.i ?? null)
+      : null;
+  const onCatHover = catalog?.onHover;
+  const hoverKey = hoverItem?.key ?? null;
+  useEffect(() => {
+    onCatHover?.(hoverKey);
+  }, [hoverKey, onCatHover]);
 
   const readout = hover
     ? (() => {
@@ -111,6 +169,121 @@ export default function CutoutView({
             className="pointer-events-none absolute inset-0 h-full w-full"
             aria-hidden="true"
           >
+            {gaia && (
+              <g data-layer="gaia" fontSize={w * 0.04} fontFamily="Inter Variable">
+                {gaia.markers.map((m) => (
+                  <circle
+                    key={m.source_id}
+                    cx={m.px[0] + 0.5}
+                    cy={h - (m.px[1] + 0.5)}
+                    r={Math.max(w * 0.012, 0.5)}
+                    fill="none"
+                    stroke="#67e8f9"
+                    strokeOpacity={0.75}
+                    strokeWidth={Math.max(w / 400, 0.15)}
+                  />
+                ))}
+                {(gaia.expected ?? []).map((e) => {
+                  const x = e.px[0] + 0.5;
+                  const y = h - (e.px[1] + 0.5);
+                  const s = w * 0.022;
+                  return (
+                    <g key={e.label}>
+                      <path
+                        d={`M${x} ${y - s} L${x + s} ${y} L${x} ${y + s} L${x - s} ${y} Z`}
+                        fill="none"
+                        stroke="#f0abfc"
+                        strokeWidth={Math.max(w / 300, 0.2)}
+                      />
+                      <text
+                        x={x + s * 1.2}
+                        y={y + s * 1.6}
+                        fill="#f5d0fe"
+                        stroke="#050816"
+                        strokeWidth={w / 500}
+                        paintOrder="stroke"
+                      >
+                        {e.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            )}
+            {catalog && (
+              <g data-layer="catalog" fontSize={catFont} fontFamily="Inter Variable">
+                {catalog.items.map((i) => {
+                  const on = i.key === catalog.highlight;
+                  return (
+                    <rect
+                      key={i.key}
+                      x={i.px[0] + 0.5 - w * 0.011}
+                      y={h - (i.px[1] + 0.5) - w * 0.011}
+                      width={w * 0.022}
+                      height={w * 0.022}
+                      fill="none"
+                      stroke={on ? "#ffffff" : CAT_COLOR[i.cat]}
+                      strokeOpacity={on ? 1 : 0.8}
+                      strokeWidth={Math.max(w / (on ? 180 : 400), 0.15)}
+                      transform={
+                        i.cat === "AllWISE" ? `rotate(45 ${i.px[0] + 0.5} ${h - (i.px[1] + 0.5)})` : undefined
+                      }
+                    />
+                  );
+                })}
+                {labels.map((l) => (
+                  <text
+                    key={`l-${l.key}`}
+                    x={l.x}
+                    y={l.y}
+                    textAnchor={l.anchor}
+                    fill={l.key === catalog.highlight ? "#ffffff" : "#e8edf7"}
+                    stroke="#050816"
+                    strokeWidth={w / 450}
+                    paintOrder="stroke"
+                  >
+                    {l.text}
+                  </text>
+                ))}
+              </g>
+            )}
+            {track && track.expected.length > 1 && (
+              <g fontSize={w * 0.045} fontFamily="Inter Variable">
+                <polyline
+                  points={track.expected.map((p) => `${p.px[0] + 0.5},${h - (p.px[1] + 0.5)}`).join(" ")}
+                  fill="none"
+                  stroke="#93c5fd"
+                  strokeWidth={Math.max(w / 260, 0.2)}
+                  strokeDasharray={`${w * 0.02} ${w * 0.015}`}
+                />
+                {track.expected.map((p) => (
+                  <g key={p.label} transform={`translate(${p.px[0] + 0.5} ${h - (p.px[1] + 0.5)})`}>
+                    <circle r={w * 0.012} fill="#93c5fd" stroke="#050816" strokeWidth={w / 400} />
+                    <text
+                      x={w * 0.02}
+                      y={-w * 0.015}
+                      fill="#e8edf7"
+                      stroke="#050816"
+                      strokeWidth={w / 500}
+                      paintOrder="stroke"
+                    >
+                      {p.label}
+                    </text>
+                  </g>
+                ))}
+                {track.measured.map((m) => (
+                  <g
+                    key={`m-${m.label}`}
+                    transform={`translate(${m.px[0] + 0.5} ${h - (m.px[1] + 0.5)})`}
+                    stroke="#f9fafb"
+                    strokeWidth={Math.max(w / 300, 0.2)}
+                  >
+                    <line x1={-w * 0.018} y1={-w * 0.018} x2={w * 0.018} y2={w * 0.018} />
+                    <line x1={-w * 0.018} y1={w * 0.018} x2={w * 0.018} y2={-w * 0.018} />
+                  </g>
+                ))}
+              </g>
+            )}
             <g stroke="#fcd34d" strokeWidth={Math.max(w / 220, 0.25)} fill="none">
               <circle cx={overlay.target[0]} cy={overlay.target[1]} r={w * 0.06} />
               <line
@@ -161,6 +334,13 @@ export default function CutoutView({
           : readout
             ? `x=${hover!.x} y=${h - 1 - hover!.y} · ${t("viewer.masked")}`
             : t("viewer.hoverHint")}
+        {hoverItem && (
+          <span className="block text-ink-100">
+            {hoverItem.full_name}
+            {hoverItem.otype ? ` · ${hoverItem.otype}` : ""} ·{" "}
+            {t(hoverItem.epoch === "moved" ? "catalog.moved" : "catalog.notMoved")}
+          </span>
+        )}
       </div>
     </figure>
   );
