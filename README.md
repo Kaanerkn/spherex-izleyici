@@ -1,4 +1,3 @@
-[README (1).md](https://github.com/user-attachments/files/34874532/README.1.md)
 # 🛰️ SPHEREx Observer
 
 **Near-Infrared All-Sky Spectral Mapping, Multi-Epoch Astronomy & Moving Celestial Object Analysis Platform**
