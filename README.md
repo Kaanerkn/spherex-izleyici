@@ -2,6 +2,12 @@
 
 **Near-Infrared All-Sky Spectral Mapping, Multi-Epoch Astronomy & Moving Celestial Object Analysis Platform**
 
+[![Live Demo](https://img.shields.io/badge/🌐_Live_Demo-spherex--izleyici.onrender.com-2ea44f?style=for-the-badge)](https://spherex-izleyici.onrender.com)
+[![Deployment](https://img.shields.io/badge/Deployed_on-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://spherex-izleyici.onrender.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](./LICENSE)
+
+> 🚀 **Live Application:** You can explore the live platform directly in your browser at **[https://spherex-izleyici.onrender.com](https://spherex-izleyici.onrender.com)**
+
 ![SPHEREx Banner](./assets/screenshots/01-hero-overview.png)
 
 ## 📖 Table of Contents
@@ -21,6 +27,8 @@
 ## 🌌 Overview
 
 **SPHEREx Observer** (*SPHEREx Gökyüzü İzleyici*) is an interactive web-based observation, multi-epoch infrared astronomy, and moving celestial object analysis platform built around NASA's **SPHEREx** (*Spectro-Photometer for the History of the Universe, Epoch of Reionization and Ices Explorer*) space telescope mission.
+
+🔗 **Try it Live:** **[https://spherex-izleyici.onrender.com](https://spherex-izleyici.onrender.com)**
 
 The SPHEREx mission surveys the entire sky in near-infrared light (spanning wavelengths from $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$) across **102 distinct spectral color bands**, gathering spectroscopic data on more than $450\text{ million}$ galaxies and over $100\text{ million}$ stars within the Milky Way. **SPHEREx Observer** transforms this vast scientific framework into an accessible, visually engaging, and interactive experience for researchers, students, and space enthusiasts alike.
 
@@ -46,7 +54,7 @@ The SPHEREx mission surveys the entire sky in near-infrared light (spanning wave
 
 ## 📸 UI Tour & Screenshots
 
-Below is a complete visual walkthrough of every module available in the **SPHEREx Observer** platform:
+Below is a complete visual walkthrough of every module available in the **[SPHEREx Observer](https://spherex-izleyici.onrender.com)** platform:
 
 ### 1. Hero Section & Mission Control Overview
 
@@ -92,15 +100,11 @@ The platform relies on rigorous astrophysical and astrodynamical models to drive
 
 As the universe expands, photons emitted by distant galaxies are stretched toward longer (redder) wavelengths. The built-in analysis engine computes dimensionless redshift $z$ from the observed wavelength ($\lambda_{\text{observed}}$) and rest-frame laboratory wavelength ($\lambda_{\text{rest}}$):
 
-$$
-z = \frac{\lambda_{\text{observed}} - \lambda_{\text{rest}}}{\lambda_{\text{rest}}}
-$$
+$$z = \frac{\lambda_{\text{observed}} - \lambda_{\text{rest}}}{\lambda_{\text{rest}}}$$
 
 For low-redshift regimes, radial recession velocity ($v$) and cosmological distance ($d$) via the Hubble-Lemaître Law are approximated as:
 
-$$
-v \approx c \cdot z \quad \text{and} \quad d \approx \frac{c \cdot z}{H_0}
-$$
+$$v \approx c \cdot z \quad \text{and} \quad d \approx \frac{c \cdot z}{H_0}$$
 
 *(Where $c \approx 299,792\text{ km/s}$ is the speed of light in vacuum and $H_0 \approx 70\text{ km s}^{-1}\text{ Mpc}^{-1}$ is the Hubble constant.)*
 
@@ -108,9 +112,7 @@ $$
 
 Instead of using a mechanical scanning spectrometer, SPHEREx steps across the sky using Linear Variable Filters. The simulator models each band according to its resolving power $R$:
 
-$$
-R = \frac{\lambda}{\Delta\lambda}
-$$
+$$R = \frac{\lambda}{\Delta\lambda}$$
 
 * **Bands 1 to 4 ($0.75\ \mu\text{m}$ to $3.82\ \mu\text{m}$):** Resolving power $R = 41$, optimized for large-scale galaxy redshift surveys.
 * **Bands 5 to 6 ($3.82\ \mu\text{m}$ to $5.00\ \mu\text{m}$):** Higher resolving power $R = 130$, tailored to resolve narrow ice absorption features ($\text{H}_2\text{O}$, $\text{CO}_2$, $\text{CO}$).
@@ -119,9 +121,7 @@ $$
 
 Instantaneous orbital speed ($v_{\text{orbit}}$) and orbital period ($T$) at altitude $h$ above Earth's radius $R_{\oplus}$ are validated via:
 
-$$
-v_{\text{orbit}} = \sqrt{\frac{G \cdot M_{\oplus}}{R_{\oplus} + h}} \quad , \quad T = 2\pi \sqrt{\frac{(R_{\oplus} + h)^3}{G \cdot M_{\oplus}}}
-$$
+$$v_{\text{orbit}} = \sqrt{\frac{G \cdot M_{\oplus}}{R_{\oplus} + h}} \quad , \quad T = 2\pi \sqrt{\frac{(R_{\oplus} + h)^3}{G \cdot M_{\oplus}}}$$
 
 ## 🛠️ Tech Stack
 
@@ -154,87 +154,3 @@ spherex-izleyici/
 ├── Dockerfile                      # Containerization configuration
 ├── render.yaml                     # Render cloud deployment blueprint
 └── README.md                       # Project documentation
-```
-
-## ⚙️ Getting Started & Installation
-
-Follow these steps to run **SPHEREx Observer** locally on your machine:
-
-### Prerequisites
-
-* **Python** (3.10+ recommended)
-* **Node.js** (v18.0.0+ recommended)
-* **Docker** (optional, for containerized execution)
-* **Git**
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com/Kaanerkn/spherex-izleyici.git
-cd spherex-izleyici
-```
-
-### 2. Configure Environment Variables
-
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-### 3. Run Backend & Frontend
-
-**Start the Backend Server:**
-
-```bash
-cd backend
-pip install -r requirements.txt
-pytest
-```
-
-**Start the Frontend Development Server:**
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-**Or Run with Docker:**
-
-```bash
-docker build -t spherex-izleyici .
-docker run -p 8000:8000 spherex-izleyici
-```
-
-## 📡 API & Data Sources
-
-| Data Source | Usage | Endpoint / Reference |
-| ----- | ----- | ----- |
-| **NASA / Caltech SPHEREx** | Official mission parameters, filter definitions, and optics specs | [spherex.caltech.edu](https://spherex.caltech.edu/) |
-| **NASA/IPAC IRSA Archive** | Infrared science archive catalogs, WISE/2MASS/SPHEREx templates | [irsa.ipac.caltech.edu](https://irsa.ipac.caltech.edu/) |
-| **SIMBAD / VizieR** | Celestial target resolution and proper motion catalogs | [simbad.cds.unistra.fr](https://simbad.cds.unistra.fr/) |
-| **NASA Open APIs** | Deep space imagery and reference metadata | [api.nasa.gov](https://api.nasa.gov/) |
-
-## 🗺️ Roadmap
-
-* [x] **Phase 1:** Core dark-mode UI architecture and responsive layout design.
-* [x] **Phase 2:** Multi-epoch target tracking and archive upstream integration (`upstreams.toml`).
-* [x] **Phase 3:** Interactive $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$ Spectrum & Light Curve Analyzer.
-* [x] **Phase 4:** Automated test suite (`pytest`) and cloud deployment on Render.
-* [x] **Phase 5:** Client-side FITS file cut-out inspector and advanced citizen science annotation tools.
-
-## 🤝 Contributing & License
-
-Contributions, issues, and feature requests are welcome!
-
-1. **Fork** this repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. **Commit** your changes (`git commit -m 'Add AmazingFeature'`).
-4. **Push** to the branch (`git push origin feature/AmazingFeature`).
-5. Open a **Pull Request**.
-
-### 📄 License
-
-Distributed under the **MIT License**. See `LICENSE` for more information.
-```
