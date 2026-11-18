@@ -1,4 +1,4 @@
-# 🛰️ SPHEREx Observer
+# 🛰️ SPHEREx Observer (SPHEREx Sky Tracker)
 
 **Near-Infrared All-Sky Spectral Mapping, Multi-Epoch Astronomy & Moving Celestial Object Analysis Platform**
 
@@ -6,7 +6,7 @@
 [![Deployment](https://img.shields.io/badge/Deployed_on-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://spherex-izleyici.onrender.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](./LICENSE)
 
-> 🚀 **Live Application:** You can explore the live platform directly in your browser at **[https://spherex-izleyici.onrender.com](https://spherex-izleyici.onrender.com)**
+> 🚀 **Live Application:** Explore the live platform directly in your browser at **[https://spherex-izleyici.onrender.com](https://spherex-izleyici.onrender.com)**
 
 ![SPHEREx Banner](./assets/screenshots/01-hero-overview.png)
 
@@ -26,7 +26,7 @@
 
 ## 🌌 Overview
 
-**SPHEREx Observer** (*SPHEREx Gökyüzü İzleyici*) is an interactive web-based observation, multi-epoch infrared astronomy, and moving celestial object analysis platform built around NASA's **SPHEREx** (*Spectro-Photometer for the History of the Universe, Epoch of Reionization and Ices Explorer*) space telescope mission.
+**SPHEREx Observer** (*SPHEREx Sky Tracker / SPHEREx Gökyüzü İzleyici*) is an interactive web-based observation, multi-epoch infrared astronomy, and moving celestial object analysis platform built around NASA's **SPHEREx** (*Spectro-Photometer for the History of the Universe, Epoch of Reionization and Ices Explorer*) space telescope mission.
 
 🔗 **Try it Live:** **[https://spherex-izleyici.onrender.com](https://spherex-izleyici.onrender.com)**
 
@@ -39,58 +39,51 @@ The SPHEREx mission surveys the entire sky in near-infrared light (spanning wave
 
 ### 🎯 Core Objectives
 
-* **Complex Data Visualization:** Transforming raw spectroscopic curves, light curves, and astrometric telemetry into intuitive charts and interactive views.
-* **Multi-Epoch Target Tracking:** Analyzing high-proper-motion stars, brown dwarfs, and variable targets across multiple infrared observation epochs.
-* **Science Communication & Education:** Demonstrating cosmic inflation, cosmological redshift ($z$), and absorption spectra of biogenic interstellar ices ($\text{H}_2\text{O}$, $\text{CO}_2$, $\text{CO}$, $\text{CH}_3\text{OH}$) through hands-on web modules.
+* **Complex Data Visualization:** Transforming raw spectroscopic curves, aperture photometry, and astrometric telemetry into intuitive charts and interactive views.
+* **Multi-Epoch Target Tracking:** Analyzing high-proper-motion stars (e.g., *Barnard's Star*), cold brown dwarfs (e.g., *WISE 0855-0714*), interstellar comets (e.g., *3I/ATLAS*), and variable targets across multiple infrared observation epochs.
+* **Science Communication & Education:** Demonstrating cosmic inflation, cosmological redshift ($z$), and multi-band infrared detector responses (D1–D6) through hands-on web modules.
 
 ## ✨ Key Features
 
-* 🛰️ **Multi-Epoch Target & Astrometry Tracker:** Tracks moving celestial objects, proper motion vectors, and coordinates across multi-epoch infrared sky surveys.
-* 🌈 **Interactive Near-Infrared Spectrum & Light Curve Analyzer:** Simulates Linear Variable Filter (LVF) observations across the $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$ range, highlighting emission, variability, and absorption features of celestial targets.
-* 🗺️ **Multi-Layer Sky Survey Viewer:** Coordinate-based ($\text{RA} / \text{Dec}$) celestial map supporting seamless transitions between optical and near-infrared survey layers, including SPHEREx Deep Fields.
-* 🧮 **Redshift ($z$) & Cosmological Distance Calculator:** Interactive tool that derives galaxy recession velocity, lookback time, and comoving distance directly from observed wavelength shifts.
-* 📊 **Scientific Mission Dashboard:** Dynamic information cards detailing quality flags, header metadata, and core science pillars.
-* 📱 **Fully Responsive Dark-Mode UI:** Astronomy-grade dark interface designed with modern glassmorphism and responsive layouts for both desktop and mobile viewports.
+* 🛰️ **Multi-Epoch Target & Astrometry Tracker:** Compares observations across different epochs using **Side-by-Side**, **Blink**, **Swipe**, **Difference**, and **Cyan-Red** modes while plotting real-time proper motion tracks.
+* 🌈 **6-Band Detector Cutouts & Spectrum Analyzer:** Visualizes per-detector band averages (D1 through D6 spanning $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$) and plots logarithmic flux density ($\mu\text{Jy}$) against wavelength ($\mu\text{m}$).
+* 🗺️ **Catalog Overlays & Zodiacal Light Subtraction:** Integrates SIMBAD, WISE, TYC, and IRSA metadata with interactive cutout sizing, relative normalization, and background zodiacal light subtraction.
+* 📍 **Real-Time Sky Position ("Where is it now?"):** Computes live J2000 proper-motion-corrected coordinates and local sky visibility for any selected city.
+* 📱 **Fully Responsive Dark-Mode UI:** Astronomy-grade dark interface designed for both desktop analysis and mobile viewports.
 
 ## 📸 UI Tour & Screenshots
 
-Below is a complete visual walkthrough of every module available in the **[SPHEREx Observer](https://spherex-izleyici.onrender.com)** platform:
+Below is a visual walkthrough of the modules available in the **[SPHEREx Observer](https://spherex-izleyici.onrender.com)** platform:
 
-### 1. Hero Section & Mission Control Overview
+### 1. Hero Section & Quick Target Selection
 
-The main landing area featuring dynamic space visuals, target search controls, quick navigation, and a high-level summary of SPHEREx parameters.
+The main landing area featuring quick-access celestial targets (*Barnard's Star*, *WISE 0855-0714*, *3I/ATLAS interstellar comet*, *M31*, *M42*), archive status indicators, and mission overview.
 
 ![Hero Overview](./assets/screenshots/01-hero-overview.png)
 
-### 2. Multi-Epoch Target Tracking & Telemetry Simulation
+### 2. Multi-Epoch Comparison (Swipe & Side-by-Side Modes)
 
-Displays real-time target coordinates, astrometric motion vectors, and observation windows along SPHEREx's survey path.
+Interactive comparison of two observation epochs (`Epoch A` vs `Epoch B`) with proper motion trajectory vectors, catalog overlays, SIMBAD object summaries, and real-time coordinate tracking.
 
-![Orbit and Target Tracker](./assets/screenshots/02-orbit-tracker-3d.png)
-
-### 3. Spectroscopic Data, Light Curve & Redshift ($z$) Panel
-
-Interactive spectral and photometric plotter that maps flux density against wavelength ($\mu\text{m}$) and time, identifying molecular absorption bands and variability.
-
-![Spectrum Analyzer](./assets/screenshots/03-spectrum-analyzer.png)
-
-### 4. Interactive Sky Map & Deep Space Explorer
-
-Explore the all-sky survey grid and polar deep fields using Right Ascension ($\alpha$) and Declination ($\delta$) celestial coordinates.
-
-| All-Sky Survey View | Deep Field Infrared Layer |
+| Interactive Swipe & Telemetry View | Side-by-Side Proper Motion Comparison |
 | ----- | ----- |
-| ![All-Sky Survey](./assets/screenshots/04-sky-map-survey.png) | ![Deep Field View](./assets/screenshots/05-deep-field-view.png) |
-| *102-Band All-Sky Spectral Mapping* | *High-Sensitivity Deep Field Targets* |
+| ![Epoch Swipe Tracker](./assets/screenshots/02-epoch-swipe-tracker.png) | ![Side by Side Comparison](./assets/screenshots/03-side-by-side-comparison.png) |
+| *Multi-Epoch Swipe Inspector & Live Astrometry Sidebar* | *Side-by-Side Epoch Comparison with Motion Track* |
 
-### 5. Spacecraft Hardware, Science Pillars & Mobile Experience
+### 3. Multi-Band Detector Cutouts (D1–D6) & Spectrophotometry
 
-Detailed breakdown of telescope optics, data quality diagnostics, and responsive mobile layout.
+Per-detector infrared image cutouts spanning bands D1 to D6 alongside the interactive aperture photometry spectrum plotter ($\text{Flux in }\mu\text{Jy}$ vs. $\text{Wavelength }\lambda\text{ in }\mu\text{m}$).
 
-| Hardware & Science Pillars | Mobile Responsive View |
+| D1–D6 Detector Band Averages | 6-Band Spectrum & Flux Analyzer |
 | ----- | ----- |
-| ![Hardware and Science](./assets/screenshots/06-hardware-science.png) | ![Mobile Responsive](./assets/screenshots/07-mobile-responsive.png) |
-| *Optical Payload & Core Science Objectives* | *Adaptive Mobile User Interface* |
+| ![Detector Bands D1-D6](./assets/screenshots/04-detector-bands-d1-d6.png) | ![Spectrum Analyzer](./assets/screenshots/05-spectrum-analyzer.png) |
+| *Wavelength Cutouts Across Detectors D1 to D6 ($0.75 - 5.0\ \mu\text{m}$)* | *Logarithmic Flux Spectrum with Error Bars & Photometry* |
+
+### 4. Mobile Responsive Experience
+
+Adaptive mobile layout providing full access to NEOSSat/CADC frames, SIMBAD astrometric parameters, and real-time sky localization on smartphones.
+
+![Mobile Responsive](./assets/screenshots/06-mobile-responsive.png)
 
 ## 🔬 System Architecture & Scientific Foundation
 
@@ -129,7 +122,7 @@ $$v_{\text{orbit}} = \sqrt{\frac{G \cdot M_{\oplus}}{R_{\oplus} + h}} \quad , \q
 | ----- | ----- | ----- |
 | **Frontend** | React, TypeScript, Tailwind CSS | Interactive user interface, sky viewer, and responsive components |
 | **Backend** | Python, FastAPI / Flask | Astronomical data processing, archive queries, and API endpoints |
-| **Data & Astronomy** | Astropy, NumPy, JSON / TOML | Coordinate transformations, FITS header flags, and light curve analysis |
+| **Data & Astronomy** | Astropy, NumPy, JSON / TOML | Coordinate transformations, FITS header flags, and photometry analysis |
 | **DevOps & Deployment** | Docker, Render (`render.yaml`) | Containerized build pipeline and cloud deployment |
 
 ## 📂 Project Structure
@@ -137,23 +130,22 @@ $$v_{\text{orbit}} = \sqrt{\frac{G \cdot M_{\oplus}}{R_{\oplus} + h}} \quad , \q
 ```text
 spherex-izleyici/
 ├── assets/
-│   └── screenshots/                # Application screenshots for documentation
+│   └── screenshots/                    # Application screenshots for documentation
 │       ├── 01-hero-overview.png
-│       ├── 02-orbit-tracker-3d.png
-│       ├── 03-spectrum-analyzer.png
-│       ├── 04-sky-map-survey.png
-│       ├── 05-deep-field-view.png
-│       ├── 06-hardware-science.png
-│       └── 07-mobile-responsive.png
-├── backend/                        # Python backend services, providers, and test suites
-├── config/                         # Upstream configuration files (upstreams.toml)
-├── docs/                           # Technical architecture and documentation
-├── frontend/                       # TypeScript / React frontend application (Hero.tsx, etc.)
-├── tools/                          # Utility scripts and FITS/HDR flag processors
-├── .env.example                    # Template for environment variables
-├── Dockerfile                      # Containerization configuration
-├── render.yaml                     # Render cloud deployment blueprint
-└── README.md                       # Project documentation
+│       ├── 02-epoch-swipe-tracker.png
+│       ├── 03-side-by-side-comparison.png
+│       ├── 04-detector-bands-d1-d6.png
+│       ├── 05-spectrum-analyzer.png
+│       └── 06-mobile-responsive.png
+├── backend/                            # Python backend services, providers, and test suites
+├── config/                             # Upstream configuration files (upstreams.toml)
+├── docs/                               # Technical architecture and documentation
+├── frontend/                           # TypeScript / React frontend application
+├── tools/                              # Utility scripts and FITS/HDR flag processors
+├── .env.example                        # Template for environment variables
+├── Dockerfile                          # Containerization configuration
+├── render.yaml                         # Render cloud deployment blueprint
+└── README.md                           # Project documentation
 ```
 
 ## ⚙️ Getting Started & Installation
@@ -212,15 +204,15 @@ docker run -p 8000:8000 spherex-izleyici
 | Data Source | Usage | Endpoint / Reference |
 | ----- | ----- | ----- |
 | **NASA / Caltech SPHEREx** | Official mission parameters, filter definitions, and optics specs | [spherex.caltech.edu](https://spherex.caltech.edu/) |
-| **NASA/IPAC IRSA Archive** | Infrared science archive catalogs, WISE/2MASS/SPHEREx templates | [irsa.ipac.caltech.edu](https://irsa.ipac.caltech.edu/) |
-| **SIMBAD / VizieR** | Celestial target resolution and proper motion catalogs | [simbad.cds.unistra.fr](https://simbad.cds.unistra.fr/) |
-| **NASA Open APIs** | Deep space imagery and reference metadata | [api.nasa.gov](https://api.nasa.gov/) |
+| **NASA/IPAC IRSA Archive** | Infrared science archive catalogs, WISE/2MASS/SPHEREx cutouts | [irsa.ipac.caltech.edu](https://irsa.ipac.caltech.edu/) |
+| **SIMBAD / VizieR (CDS)** | Celestial target resolution and proper motion catalogs | [simbad.cds.unistra.fr](https://simbad.cds.unistra.fr/) |
+| **CSA / CADC (NEOSSat)** | Canadian Astronomy Data Centre space telescope frame previews | [cadc-ccda.hia-iha.nrc-cnrc.gc.ca](https://www.cadc-ccda.hia-iha.nrc-cnrc.gc.ca/) |
 
 ## 🗺️ Roadmap
 
 * [x] **Phase 1:** Core dark-mode UI architecture and responsive layout design.
 * [x] **Phase 2:** Multi-epoch target tracking and archive upstream integration (`upstreams.toml`).
-* [x] **Phase 3:** Interactive $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$ Spectrum & Light Curve Analyzer.
+* [x] **Phase 3:** Interactive $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$ 6-Band Detector & Spectrum Analyzer.
 * [x] **Phase 4:** Automated test suite (`pytest`) and cloud deployment on Render.
 * [x] **Phase 5:** Client-side FITS file cut-out inspector and advanced citizen science annotation tools.
 
