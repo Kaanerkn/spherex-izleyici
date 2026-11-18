@@ -154,3 +154,86 @@ spherex-izleyici/
 ├── Dockerfile                      # Containerization configuration
 ├── render.yaml                     # Render cloud deployment blueprint
 └── README.md                       # Project documentation
+```
+
+## ⚙️ Getting Started & Installation
+
+You can either access the deployed application directly at **[https://spherex-izleyici.onrender.com](https://spherex-izleyici.onrender.com)** or follow these steps to run **SPHEREx Observer** locally on your machine:
+
+### Prerequisites
+
+* **Python** (3.10+ recommended)
+* **Node.js** (v18.0.0+ recommended)
+* **Docker** (optional, for containerized execution)
+* **Git**
+
+### 1. Clone the Repository
+
+```bash
+git clone [https://github.com/Kaanerkn/spherex-izleyici.git](https://github.com/Kaanerkn/spherex-izleyici.git)
+cd spherex-izleyici
+```
+
+### 2. Configure Environment Variables
+
+Copy `.env.example` to `.env`:
+
+```bash
+cp .env.example .env
+```
+
+### 3. Run Backend & Frontend
+
+**Start the Backend Server:**
+
+```bash
+cd backend
+pip install -r requirements.txt
+pytest
+```
+
+**Start the Frontend Development Server:**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**Or Run with Docker:**
+
+```bash
+docker build -t spherex-izleyici .
+docker run -p 8000:8000 spherex-izleyici
+```
+
+## 📡 API & Data Sources
+
+| Data Source | Usage | Endpoint / Reference |
+| ----- | ----- | ----- |
+| **NASA / Caltech SPHEREx** | Official mission parameters, filter definitions, and optics specs | [spherex.caltech.edu](https://spherex.caltech.edu/) |
+| **NASA/IPAC IRSA Archive** | Infrared science archive catalogs, WISE/2MASS/SPHEREx templates | [irsa.ipac.caltech.edu](https://irsa.ipac.caltech.edu/) |
+| **SIMBAD / VizieR** | Celestial target resolution and proper motion catalogs | [simbad.cds.unistra.fr](https://simbad.cds.unistra.fr/) |
+| **NASA Open APIs** | Deep space imagery and reference metadata | [api.nasa.gov](https://api.nasa.gov/) |
+
+## 🗺️ Roadmap
+
+* [x] **Phase 1:** Core dark-mode UI architecture and responsive layout design.
+* [x] **Phase 2:** Multi-epoch target tracking and archive upstream integration (`upstreams.toml`).
+* [x] **Phase 3:** Interactive $0.75\ \mu\text{m}$ to $5.0\ \mu\text{m}$ Spectrum & Light Curve Analyzer.
+* [x] **Phase 4:** Automated test suite (`pytest`) and cloud deployment on Render.
+* [x] **Phase 5:** Client-side FITS file cut-out inspector and advanced citizen science annotation tools.
+
+## 🤝 Contributing & License
+
+Contributions, issues, and feature requests are welcome!
+
+1. **Fork** this repository.
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
+3. **Commit** your changes (`git commit -m 'Add AmazingFeature'`).
+4. **Push** to the branch (`git push origin feature/AmazingFeature`).
+5. Open a **Pull Request**.
+
+### 📄 License
+
+Distributed under the **MIT License**. See `LICENSE` for more information.
